@@ -32,43 +32,75 @@
     font: 15px/1.6 var(--sans);
     font-variant-numeric: tabular-nums;
   }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 32px; }
-  @media (max-width: 640px) { .wrap { padding: 0 20px; } }
 
-  /* ---------------------------------------------------------- masthead */
-  .masthead { border-bottom: 1px solid var(--rule-2); background: var(--panel); }
-  .masthead .wrap { padding-top: 34px; padding-bottom: 26px; }
+  /* ------------------------------------------------------------- shell */
+  .shell { display: flex; min-height: 100vh; align-items: flex-start; }
+
+  .side {
+    flex: 0 0 240px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--rule-2); background: var(--panel);
+    display: flex; flex-direction: column;
+  }
+  .side-top { padding: 26px 20px 18px; border-bottom: 1px solid var(--rule); }
+  .wordmark { font-family: var(--serif); font-size: 18px; line-height: 1.25; }
+  .tagline {
+    margin-top: 3px; font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: .14em; color: var(--muted);
+  }
+
+  .side-nav { padding: 14px 10px; }
+  .side-group {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .14em;
+    color: var(--muted); margin: 16px 10px 4px;
+  }
+  .side-nav .side-group:first-child { margin-top: 2px; }
+  .side-link {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    text-align: left; font: inherit; font-size: 13.5px; color: #45413a;
+    background: transparent; border: 0; border-radius: 3px;
+    padding: 8px 10px; cursor: pointer;
+  }
+  .side-link:hover { background: var(--sunk); }
+  .side-link[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #f6f8f6; }
+  .side-link .count {
+    margin-left: auto; font-size: 10.5px; color: var(--muted); background: var(--sunk);
+    border: 1px solid var(--rule); border-radius: 999px; padding: 1px 7px;
+  }
+  .side-link[aria-pressed="true"] .count { color: #f6f8f6; background: rgba(255,255,255,.14); border-color: transparent; }
+
+  .side-stats { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--rule); }
+  .side-stats .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 12.5px; }
+  .side-stats .row b { font-weight: 600; }
+  .side-stats .row span { color: var(--muted); }
+
+  .side-about { padding: 14px 20px 18px; border-top: 1px solid var(--rule); font-size: 12px; }
+  .side-about summary { font-size: 12px; }
+  .side-about p { margin: 10px 0 0; color: #4a463f; font-family: var(--serif); font-size: 13px; line-height: 1.55; }
+  .side-about em { font-style: italic; color: var(--ink); }
+  .side-foot { padding: 12px 20px 20px; font-size: 12px; }
+  .side-foot a { color: var(--accent); display: block; padding: 3px 0; }
+
+  .stage-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .stage { padding: 40px 40px 12px; max-width: 860px; width: 100%; }
+  @media (max-width: 640px) { .stage { padding: 28px 20px 8px; } }
+
+  .stage-head { margin-bottom: 28px; }
   h1 {
     margin: 0; font-family: var(--serif); font-weight: 400;
-    font-size: 31px; line-height: 1.15; letter-spacing: -0.012em;
+    font-size: 27px; line-height: 1.2; letter-spacing: -0.01em;
   }
-  .thesis {
-    margin: 12px 0 0; max-width: 62ch; font-family: var(--serif);
-    font-size: 16.5px; line-height: 1.55; color: #3d3a34;
-  }
-  .thesis em { font-style: italic; color: var(--ink); }
+  .stage-sub { margin: 8px 0 0; max-width: 60ch; color: #4a463f; font-size: 14.5px; }
 
-  .ledger {
-    display: flex; flex-wrap: wrap; gap: 0; margin-top: 26px;
-    border-top: 1px solid var(--rule); padding-top: 16px;
-  }
-  .ledger div { padding-right: 34px; margin-right: 34px; border-right: 1px solid var(--rule); }
-  .ledger div:last-child { border-right: 0; margin-right: 0; padding-right: 0; }
-  .ledger b { display: block; font-size: 25px; font-weight: 500; letter-spacing: -0.02em; }
-  .ledger span {
-    display: block; margin-top: 1px; font-size: 10.5px; color: var(--muted);
-    text-transform: uppercase; letter-spacing: .1em;
-  }
+  .view + .view { margin-top: 0; }
 
   /* ---------------------------------------------------------- sections */
-  section { padding: 46px 0 8px; }
-  .section-head { border-bottom: 1px solid var(--rule-2); padding-bottom: 10px; margin-bottom: 26px; }
+  .section-head { border-bottom: 1px solid var(--rule-2); padding-bottom: 10px; margin: 30px 0 20px; }
+  .section-head:first-child { margin-top: 0; }
   .kicker {
     font-size: 10.5px; text-transform: uppercase; letter-spacing: .14em;
     color: var(--muted); margin-bottom: 5px;
   }
-  h2 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 22px; letter-spacing: -0.01em; }
-  .lede { margin: 9px 0 0; max-width: 68ch; color: #4a463f; font-size: 14.5px; }
+  h2 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 19px; letter-spacing: -0.01em; }
 
   /* ---------------------------------------------------------- exhibits */
   .exhibit { border-top: 1px solid var(--rule); padding: 26px 0 30px; }
@@ -157,6 +189,7 @@
     background: var(--panel); color: var(--ink);
   }
   input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input[type=search]:disabled { background: var(--sunk); color: var(--faint); cursor: not-allowed; }
   .spacer { flex: 1; }
 
   /* ---------------------------------------------------------- listings */
@@ -194,102 +227,141 @@
   /* ---------------------------------------------------------- upload */
   .drop {
     border: 1px dashed var(--rule-2); background: var(--panel);
-    padding: 24px; text-align: center; cursor: pointer;
+    padding: 44px 24px; text-align: center; cursor: pointer;
   }
   .drop:hover, .drop.over { border-color: var(--accent); background: #f6f8f6; }
-  .drop b { font-weight: 600; }
-  .drop p { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+  .drop b { font-size: 15.5px; font-weight: 600; }
+  .drop p { margin: 7px 0 0; font-size: 13px; color: var(--muted); }
+
+  .play-stats { display: flex; flex-wrap: wrap; gap: 0; margin-top: 22px; border-top: 1px solid var(--rule); padding-top: 14px; }
+  .play-stats div { padding-right: 28px; margin-right: 28px; border-right: 1px solid var(--rule); }
+  .play-stats div:last-child { border-right: 0; margin-right: 0; padding-right: 0; }
+  .play-stats b { display: block; font-size: 21px; font-weight: 500; letter-spacing: -0.02em; }
+  .play-stats span {
+    display: block; margin-top: 1px; font-size: 10.5px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .1em;
+  }
+  .play-note { margin: 14px 0 0; font-size: 13.5px; color: var(--muted); }
+  .example-list figure {
+    border: 1px solid var(--rule); background: var(--panel); padding: 15px 17px; margin-bottom: 9px;
+  }
+  .play-cta { margin: 22px 0 4px; display: flex; gap: 10px; flex-wrap: wrap; }
 
   footer {
-    margin-top: 56px; border-top: 1px solid var(--rule-2); background: var(--panel);
-    font-size: 12.5px; color: var(--muted);
+    margin-top: 20px; border-top: 1px solid var(--rule-2);
+    font-size: 12.5px; color: var(--muted); padding: 20px 40px 30px;
   }
-  footer .wrap { padding-top: 20px; padding-bottom: 30px; }
   footer a { color: var(--accent); }
+  @media (max-width: 640px) { footer { padding: 16px 20px 24px; } }
+
+  /* ---------------------------------------------------------- responsive shell */
+  @media (max-width: 860px) {
+    .shell { flex-direction: column; }
+    .side {
+      position: static; height: auto; flex: none; width: 100%;
+      border-right: 0; border-bottom: 1px solid var(--rule-2);
+    }
+    .side-nav { display: flex; flex-wrap: wrap; gap: 4px; padding: 12px 16px; }
+    .side-group { display: none; }
+    .side-link { width: auto; }
+    .side-stats, .side-about { display: none; }
+  }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
 <body>
 
-<header class="masthead">
-  <div class="wrap">
-    <h1>Fact Knowledge Layer</h1>
-    <p class="thesis">
-      Reads PDFs, ties every fact to the sentence it came from, and works out whether
-      facts across documents agree, disagree, or only appear to.
-      <em>A difference between two numbers is not called a contradiction until the
-      system has tried to explain it and failed.</em>
-    </p>
-    <div class="ledger" id="ledger" aria-live="polite"></div>
+<div class="shell">
+  <nav class="side">
+    <div class="side-top">
+      <div class="wordmark">Fact Knowledge Layer</div>
+      <div class="tagline">Playground</div>
+    </div>
+
+    <div class="side-nav">
+      <button class="side-link" data-view="playground" aria-pressed="true">Try it</button>
+
+      <div class="side-group">Assignment</div>
+      <button class="side-link" data-view="exhibits" aria-pressed="false">
+        The four cases <span class="count" id="exhibitCount">4</span>
+      </button>
+
+      <div class="side-group">Explore</div>
+      <button class="side-link" data-view="explore" data-tab="relations" aria-pressed="false">Relationships</button>
+      <button class="side-link" data-view="explore" data-tab="facts" aria-pressed="false">Facts</button>
+      <button class="side-link" data-view="explore" data-tab="quarantine" aria-pressed="false">Quarantined</button>
+      <button class="side-link" data-view="explore" data-tab="documents" aria-pressed="false">Documents</button>
+    </div>
+
+    <div class="side-stats" id="ledger" aria-live="polite"></div>
+
+    <details class="side-about">
+      <summary>About this system</summary>
+      <p>
+        Reads PDFs, ties every fact to the sentence it came from, and works out whether
+        facts across documents agree, disagree, or only appear to.
+        <em>A difference between two numbers is not called a contradiction until the
+        system has tried to explain it and failed.</em>
+      </p>
+    </details>
+
+    <div class="side-foot">
+      <a href="/docs">API reference</a>
+      <a href="https://github.com/dormeneur/rag_superjoin">Source on GitHub</a>
+    </div>
+  </nav>
+
+  <div class="stage-col">
+    <main class="stage">
+
+      <section class="view" id="view-playground">
+        <div class="stage-head">
+          <h1>Try it</h1>
+          <p class="stage-sub">
+            Drop in a PDF. It is read, grounded in its own text, and compared against
+            everything already in the layer — no setup, nothing to configure.
+          </p>
+        </div>
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload a PDF">
+          <b>Drop a PDF here, or click to choose one</b>
+          <p id="uploadNote">Text-based PDFs only — there is no OCR.</p>
+        </div>
+        <div class="play-result" id="playResult" hidden></div>
+      </section>
+
+      <section class="view" id="view-exhibits" hidden>
+        <div class="stage-head">
+          <h1>The four required cases</h1>
+          <p class="stage-sub">
+            Each is selected at query time by rule, not picked by hand, so these rebuild
+            themselves against whatever documents are loaded — including anything you upload.
+          </p>
+        </div>
+        <div id="exhibits"></div>
+      </section>
+
+      <section class="view" id="view-explore" hidden>
+        <div class="stage-head">
+          <h1 id="exploreTitle">Relationships</h1>
+          <p class="stage-sub">Everything the layer currently holds.</p>
+        </div>
+        <div class="controls">
+          <span id="filters"></span>
+          <span class="spacer"></span>
+          <input type="search" id="search" placeholder="Search entity, metric or quote…" aria-label="Search facts">
+        </div>
+        <div id="view"></div>
+        <div class="controls" id="pager" style="margin-top:14px"></div>
+      </section>
+
+    </main>
+
+    <footer>
+      Verdicts come from rules in <code>reconcile.py</code>, never from a language model,
+      so they are reproducible. <a href="/docs">API reference</a>.
+    </footer>
   </div>
-</header>
-
-<main>
-  <section>
-    <div class="wrap">
-      <div class="section-head">
-        <div class="kicker">Exhibits</div>
-        <h2>The four cases, drawn from the corpus below</h2>
-        <p class="lede">
-          Each is selected at query time by rule — best evidence, spanning two documents
-          where possible. Nothing here is hand-picked, so these rebuild themselves against
-          whatever documents are loaded.
-        </p>
-      </div>
-      <div id="exhibits"></div>
-    </div>
-  </section>
-
-  <section>
-    <div class="wrap">
-      <div class="section-head">
-        <div class="kicker">Explore</div>
-        <h2>Everything the layer holds</h2>
-      </div>
-
-      <div class="controls" role="tablist">
-        <button data-tab="relations" aria-pressed="true">Relationships</button>
-        <button data-tab="facts" aria-pressed="false">Facts</button>
-        <button data-tab="quarantine" aria-pressed="false">Quarantined</button>
-        <button data-tab="documents" aria-pressed="false">Documents</button>
-        <span class="spacer"></span>
-        <input type="search" id="search" placeholder="Search entity, metric or quote…"
-               aria-label="Search facts">
-      </div>
-
-      <div class="controls" id="filters"></div>
-      <div id="view"></div>
-      <div class="controls" id="pager" style="margin-top:14px"></div>
-    </div>
-  </section>
-
-  <section>
-    <div class="wrap">
-      <div class="section-head">
-        <div class="kicker">Add to the layer</div>
-        <h2>Upload your own PDF</h2>
-        <p class="lede">
-          It is added to the existing knowledge layer rather than replacing it, then compared
-          against everything already stored. A short document takes under a minute; a
-          hundred-page report takes several, because free model tiers are paced.
-        </p>
-      </div>
-      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload a PDF">
-        <b>Drop a PDF here, or click to choose one</b>
-        <p id="uploadNote">Text-based PDFs only — there is no OCR.</p>
-      </div>
-    </div>
-  </section>
-</main>
-
-<footer>
-  <div class="wrap">
-    Verdicts come from rules in <code>reconcile.py</code>, never from a language model,
-    so they are reproducible. The model reads language and copies strings; the code does
-    every conversion, every date and every verdict.
-    <a href="/docs">API reference</a>.
-  </div>
-</footer>
+</div>
 
 <script>
 "use strict";
@@ -299,9 +371,11 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const PAGE_SIZE = 10;
+const TAB_LABELS = { relations: "Relationships", facts: "Facts", quarantine: "Quarantined", documents: "Documents" };
 let tab = "relations";
 let verdict = "";
 let offset = 0;
+let currentView = "playground";
 
 /* ------------------------------------------------------------------ pieces */
 
@@ -321,6 +395,18 @@ function figure(claim) {
     </div>
     ${scope ? `<div class="scope">${scope}</div>` : ""}
     <blockquote>${esc(claim.quote)}</blockquote>
+  </figure>`;
+}
+
+function quarantineFigure(claim) {
+  return `<figure>
+    <div class="figure-value">${esc(claim.entity_label || claim.entity)} · ${esc(claim.metric_label || claim.metric)}</div>
+    <div class="provenance">
+      <span class="file">${esc(claim.document?.filename || "—")}</span>
+      <span class="dot">·</span><span>page ${claim.page_no}</span>
+    </div>
+    <blockquote>${esc(claim.quote)}</blockquote>
+    <div class="provenance warn">${esc(claim.quarantine_reason)}</div>
   </figure>`;
 }
 
@@ -464,7 +550,7 @@ async function ledger() {
       ["documents", "Documents"], ["facts", "Facts"],
       ["relations", "Relationships"], ["quarantined", "Quarantined"],
     ].map(([k, label]) =>
-      `<div><b>${(c[k] ?? 0).toLocaleString("en-IN")}</b><span>${label}</span></div>`
+      `<div class="row"><span>${label}</span><b>${(c[k] ?? 0).toLocaleString("en-IN")}</b></div>`
     ).join("");
   } catch { $("ledger").innerHTML = ""; }
 }
@@ -480,6 +566,13 @@ function filterBar() {
     ["", "CONTRADICTS", "RECONCILABLE", "CORROBORATES"].map((v) =>
       `<button data-verdict="${v}" aria-pressed="${v === verdict}">${v || "All verdicts"}</button>`
     ).join("");
+}
+
+function updateSearchState() {
+  const relevant = tab === "facts" || tab === "quarantine";
+  const box = $("search");
+  box.disabled = !relevant;
+  box.placeholder = relevant ? "Search entity, metric or quote…" : "Not searchable here";
 }
 
 async function listing() {
@@ -520,13 +613,35 @@ function pager(count) {
   if (forward) $("next").onclick = () => { offset += PAGE_SIZE; listing(); };
 }
 
-/* -------------------------------------------------------------- behaviour */
+/* ------------------------------------------------------------------- nav */
 
-document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => {
-  tab = b.dataset.tab; offset = 0;
-  document.querySelectorAll("[data-tab]").forEach((o) =>
-    o.setAttribute("aria-pressed", String(o === b)));
-  filterBar(); listing();
+const VIEWS = ["playground", "exhibits", "explore"];
+
+function setActiveNav() {
+  document.querySelectorAll(".side-link").forEach((b) => {
+    const active = b.dataset.view === "explore"
+      ? (currentView === "explore" && b.dataset.tab === tab)
+      : (b.dataset.view === currentView && !b.dataset.tab);
+    b.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function showView(name) {
+  currentView = name;
+  VIEWS.forEach((v) => { const el = $("view-" + v); if (el) el.hidden = v !== name; });
+  setActiveNav();
+}
+
+document.body.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-view]");
+  if (!b) return;
+  if (b.dataset.tab && b.dataset.tab !== tab) {
+    tab = b.dataset.tab; offset = 0;
+    filterBar(); updateSearchState();
+    $("exploreTitle").textContent = TAB_LABELS[tab] || "Explore";
+    listing();
+  }
+  showView(b.dataset.view);
 });
 
 $("filters").onclick = (e) => {
@@ -541,6 +656,8 @@ $("search").oninput = () => {
   clearTimeout(typing);
   typing = setTimeout(() => { offset = 0; listing(); }, 250);
 };
+
+/* --------------------------------------------------------------- upload */
 
 const drop = $("drop");
 const picker = Object.assign(document.createElement("input"),
@@ -558,6 +675,7 @@ drop.ondrop = (e) => {
 
 async function upload(file) {
   const note = $("uploadNote");
+  $("playResult").hidden = true;
   const started = Date.now();
   const tick = setInterval(() => {
     note.textContent = `Reading ${file.name}… ${Math.round((Date.now() - started) / 1000)}s elapsed.`;
@@ -573,22 +691,68 @@ async function upload(file) {
       note.innerHTML = `<span class="warn">${esc(result.detail || "Upload failed.")}</span>`;
       return;
     }
-    note.textContent =
-      `${file.name}: ${result.page_count} pages, ${result.claims_extracted} facts, ` +
-      `${result.claims_quarantined} quarantined, ${result.relations_created} new relationships.` +
-      (result.note ? ` ${result.note}` : "");
+    note.textContent = "Text-based PDFs only — there is no OCR.";
     offset = 0;
     ledger(); exhibits(); listing();
+    await renderPlayResult(file.name, result);
   } catch (err) {
     clearInterval(tick);
     note.innerHTML = `<span class="warn">Upload failed: ${esc(err.message || err)}</span>`;
   }
 }
 
+async function renderPlayResult(filename, result) {
+  const box = $("playResult");
+  const stats = [
+    ["Pages read", result.pages_read],
+    ["Facts found", result.claims_extracted],
+    ["Quarantined", result.claims_quarantined],
+    ["New relationships", result.relations_created],
+  ];
+  const statsHtml = stats.map(([label, value]) =>
+    `<div><b>${(value ?? 0).toLocaleString("en-IN")}</b><span>${label}</span></div>`
+  ).join("");
+
+  let examplesHtml = "";
+  if (result.claims_extracted > 0) {
+    try {
+      const rows = await api(`/api/claims?doc_id=${result.document_id}&status=active&limit=4`);
+      if (rows.length) {
+        examplesHtml = `<div class="section-head"><div class="kicker">What we found in this document</div></div>
+          <div class="example-list">${rows.map(figure).join("")}</div>`;
+      }
+    } catch { /* best-effort preview; the counts above already tell the story */ }
+  }
+
+  let quarantineHtml = "";
+  if (result.claims_quarantined > 0) {
+    try {
+      const rows = await api(`/api/claims?doc_id=${result.document_id}&status=quarantined&limit=1`);
+      if (rows.length) {
+        quarantineHtml = `<div class="section-head"><div class="kicker">Caught and quarantined, not shown as a fact</div></div>
+          <div class="example-list">${rows.map(quarantineFigure).join("")}</div>`;
+      }
+    } catch { /* same as above */ }
+  }
+
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="play-stats">${statsHtml}</div>
+    ${result.note ? `<p class="play-note">${esc(result.note)}</p>` : ""}
+    ${examplesHtml}
+    ${quarantineHtml}
+    <p class="play-cta">
+      <button data-view="exhibits">See the four required cases →</button>
+      <button data-view="explore" data-tab="relations">Browse everything the layer holds →</button>
+    </p>`;
+}
+
 filterBar();
+updateSearchState();
 ledger();
 exhibits();
 listing();
+showView("playground");
 </script>
 </body>
 </html>
