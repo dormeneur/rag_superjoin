@@ -56,14 +56,42 @@ cp "$root/deploy/factlayer.db.gz" "$staging/deploy/factlayer.db.gz"
 mv "$staging/deploy/README-space.md" "$staging/README.md"
 
 # Create the Space if it is not there yet. Harmless when it already exists.
+created=""
 if [ -n "${HF_TOKEN:-}" ]; then
   echo "Creating the Space (skipped if it already exists)..."
-  curl -sS -X POST https://huggingface.co/api/repos/create \
+  created=$(curl -sS -X POST https://huggingface.co/api/repos/create \
     -H "Authorization: Bearer $HF_TOKEN" \
     -H "Content-Type: application/json" \
     -d "{\"type\":\"space\",\"name\":\"$space\",\"sdk\":\"docker\",\"private\":false}" \
-    -o /dev/null -w "  create: HTTP %{http_code}\n" || true
+    -o /dev/null -w "%{http_code}" 2>/dev/null || true)
+  created="${created:-000}"
+  echo "  create: HTTP $created"
 fi
+
+# 402 and 403 mean the account cannot create a Space through the API. Creating it
+# once in the browser costs nothing and makes every later push work.
+case "$created" in
+  402|403)
+    cat >&2 <<EOF
+
+The API would not create the Space (HTTP $created). Create it once by hand, which
+takes about thirty seconds, then run this command again:
+
+  1. Open  https://huggingface.co/new-space
+  2. Choose "Manual setup" (not the AI agent option)
+  3. Space name:   $space
+     Licence:      mit
+     Select the SDK: Docker  ->  Blank
+     Hardware:     CPU basic (free)
+     Visibility:   Public
+  4. Click "Create Space", then re-run:
+
+       HF_TOKEN=... deploy/publish.sh $user $space
+
+EOF
+    exit 1
+    ;;
+esac
 
 cd "$staging"
 git init -q
