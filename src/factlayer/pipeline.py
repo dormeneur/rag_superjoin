@@ -49,7 +49,10 @@ def ingest(data: bytes, filename: str, *, store: Store | None = None) -> IngestR
 
     digest = hashlib.sha256(data).hexdigest()
     if existing := store.document_by_hash(digest):
-        if existing["status"] != "partial":
+        # Only a finished document is a duplicate. Anything else — left partial by a
+        # quota, or stuck on "processing" because the run was killed — is unfinished
+        # work to pick up, not work to skip.
+        if existing["status"] == "complete":
             return _already_have_it(store, existing)
         return _read_pending_pages(store, existing["id"], existing["filename"],
                                    existing["page_count"], resumed=True)

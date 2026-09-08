@@ -414,3 +414,27 @@ def test_rebuilding_drops_relations_the_rules_no_longer_produce(fake_llm, pdf_by
 
     rebuild_relations()
     assert [r for r in S().relations() if r["reason_code"] == "STALE"] == []
+
+
+def test_a_document_interrupted_mid_run_is_resumed_not_stranded(fake_llm, pdf_bytes):
+    """A killed process leaves a document marked 'processing'. Treating anything
+    that is not finished as already-present strands it: never completed, and never
+    retried because it looks like a duplicate."""
+    data = pdf_bytes([REVENUE_PAGE])
+
+    fake_llm({"8,142 crore": revenue_claim()})
+    first = ingest(data, "annual-report.pdf")
+    Store().set_document_status(first.document_id, "processing")  # as a crash leaves it
+
+    second = ingest(data, "annual-report.pdf")
+
+    assert second.status == "complete"
+    assert second.document_id == first.document_id
+    assert len(Store().documents()) == 1
+
+
+def test_only_a_finished_document_counts_as_a_duplicate(fake_llm, pdf_bytes):
+    fake_llm({"8,142 crore": revenue_claim()})
+    data = pdf_bytes([REVENUE_PAGE])
+    assert ingest(data, "a.pdf").status == "complete"
+    assert ingest(data, "a.pdf").status == "duplicate"
