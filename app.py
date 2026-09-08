@@ -10,11 +10,19 @@ from __future__ import annotations
 import gzip
 import os
 import shutil
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent
+
+# Run from the checkout without installing it. A Space installs requirements.txt and
+# then runs this file, so relying on the package being installed adds a step that can
+# fail on an image we do not control.
+SRC = ROOT / "src"
+if SRC.is_dir() and str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 SEED = ROOT / "deploy" / "factlayer.db.gz"
-DB = Path(os.getenv("FACTLAYER_DB", ROOT / "factlayer.db"))
+DB = Path(os.getenv("FACTLAYER_DB", "/tmp/factlayer.db"))
 
 
 def unpack_corpus() -> None:
