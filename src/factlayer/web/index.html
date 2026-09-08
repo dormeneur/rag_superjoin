@@ -4,238 +4,591 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fact Knowledge Layer</title>
+<meta name="description" content="Extracts facts from PDFs, ties each one to the sentence it came from, and works out whether facts across documents corroborate, contradict, or can be reconciled.">
 <style>
   :root {
-    --bg: #fbfbf9; --panel: #fff; --ink: #1a1a18; --muted: #6b6b64;
-    --line: #e4e4de; --accent: #2f5d50;
-    --agree: #2f6f4f; --conflict: #a33a2a; --explained: #8a6a1f; --agree-bg: #edf5f0;
-    --conflict-bg: #fbeeea; --explained-bg: #fbf5e6;
+    --paper:   #faf9f6;
+    --panel:   #fefdfb;
+    --sunk:    #f4f2ec;
+    --ink:     #1c1b18;
+    --muted:   #6f6b62;
+    --faint:   #948f86;
+    --rule:    #e2dfd6;
+    --rule-2:  #cfcbbf;
+    --accent:  #2c5545;
+
+    --agree:      #2f6a4a;  --agree-bg:      #edf4ef;  --agree-rule:      #bcd6c6;
+    --conflict:   #a3402c;  --conflict-bg:   #fbeee9;  --conflict-rule:   #e8c4b6;
+    --explained:  #8a6a1f;  --explained-bg:  #faf3e3;  --explained-rule:  #e3d3a8;
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans:  ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono:  ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { padding: 22px 28px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  h1 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); font-size: 13px; margin-top: 3px; }
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 28px 80px; }
-  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
-  .stats { gap: 26px; margin: 18px 0 22px; }
-  .stat b { display: block; font-size: 22px; font-weight: 600; }
-  .stat span { color: var(--muted); font-size: 12px; text-transform: uppercase;
-               letter-spacing: .06em; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-          padding: 16px 18px; margin-bottom: 12px; }
-  .drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 26px;
-          text-align: center; color: var(--muted); background: var(--panel); cursor: pointer; }
-  .drop.over { border-color: var(--accent); color: var(--accent); background: #f2f7f5; }
-  button { font: inherit; border: 1px solid var(--line); background: var(--panel);
-           border-radius: 7px; padding: 6px 13px; cursor: pointer; color: var(--ink); }
-  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .tabs { margin: 22px 0 14px; }
-  .verdict { font-size: 11px; font-weight: 600; letter-spacing: .07em; padding: 3px 8px;
-             border-radius: 5px; text-transform: uppercase; }
-  .CORROBORATES { color: var(--agree); background: var(--agree-bg); }
-  .CONTRADICTS { color: var(--conflict); background: var(--conflict-bg); }
-  .RECONCILABLE { color: var(--explained); background: var(--explained-bg); }
-  .why { margin: 10px 0 12px; }
-  .evidence { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; }
-  .evidence > div { display: flex; flex-direction: column; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 15px/1.6 var(--sans);
+    font-variant-numeric: tabular-nums;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+  @media (max-width: 640px) { .wrap { padding: 0 20px; } }
+
+  /* ---------------------------------------------------------- masthead */
+  .masthead { border-bottom: 1px solid var(--rule-2); background: var(--panel); }
+  .masthead .wrap { padding-top: 34px; padding-bottom: 26px; }
+  h1 {
+    margin: 0; font-family: var(--serif); font-weight: 400;
+    font-size: 31px; line-height: 1.15; letter-spacing: -0.012em;
+  }
+  .thesis {
+    margin: 12px 0 0; max-width: 62ch; font-family: var(--serif);
+    font-size: 16.5px; line-height: 1.55; color: #3d3a34;
+  }
+  .thesis em { font-style: italic; color: var(--ink); }
+
+  .ledger {
+    display: flex; flex-wrap: wrap; gap: 0; margin-top: 26px;
+    border-top: 1px solid var(--rule); padding-top: 16px;
+  }
+  .ledger div { padding-right: 34px; margin-right: 34px; border-right: 1px solid var(--rule); }
+  .ledger div:last-child { border-right: 0; margin-right: 0; padding-right: 0; }
+  .ledger b { display: block; font-size: 25px; font-weight: 500; letter-spacing: -0.02em; }
+  .ledger span {
+    display: block; margin-top: 1px; font-size: 10.5px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .1em;
+  }
+
+  /* ---------------------------------------------------------- sections */
+  section { padding: 46px 0 8px; }
+  .section-head { border-bottom: 1px solid var(--rule-2); padding-bottom: 10px; margin-bottom: 26px; }
+  .kicker {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .14em;
+    color: var(--muted); margin-bottom: 5px;
+  }
+  h2 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 22px; letter-spacing: -0.01em; }
+  .lede { margin: 9px 0 0; max-width: 68ch; color: #4a463f; font-size: 14.5px; }
+
+  /* ---------------------------------------------------------- exhibits */
+  .exhibit { border-top: 1px solid var(--rule); padding: 26px 0 30px; }
+  .exhibit:first-of-type { border-top: 0; padding-top: 4px; }
+  .exhibit-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+  .numeral {
+    font-family: var(--serif); font-size: 13px; color: var(--faint);
+    letter-spacing: .06em; min-width: 24px;
+  }
+  .exhibit-title { font-family: var(--serif); font-size: 18.5px; letter-spacing: -0.005em; }
+  .exhibit-why {
+    font-family: var(--serif); font-size: 16px; line-height: 1.6;
+    margin: 12px 0 18px; max-width: 74ch; color: #2f2c27;
+  }
+
+  .chip {
+    font-family: var(--sans); font-size: 10px; font-weight: 600;
+    letter-spacing: .11em; text-transform: uppercase;
+    padding: 3px 8px 2.5px; border: 1px solid; border-radius: 2px; white-space: nowrap;
+  }
+  .CORROBORATES { color: var(--agree);     background: var(--agree-bg);     border-color: var(--agree-rule); }
+  .CONTRADICTS  { color: var(--conflict);  background: var(--conflict-bg);  border-color: var(--conflict-rule); }
+  .RECONCILABLE { color: var(--explained); background: var(--explained-bg); border-color: var(--explained-rule); }
+  .QUARANTINED  { color: var(--conflict);  background: var(--conflict-bg);  border-color: var(--conflict-rule); }
+  .code {
+    font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--rule); border-radius: 2px; padding: 2.5px 7px; white-space: nowrap;
+  }
+
+  /* ---------------------------------------------------------- evidence */
+  .evidence { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--rule); }
+  .evidence > figure { margin: 0; padding: 16px 18px; display: flex; flex-direction: column; }
+  .evidence > figure + figure { border-left: 1px solid var(--rule); }
+  @media (max-width: 700px) {
+    .evidence { grid-template-columns: 1fr; }
+    .evidence > figure + figure { border-left: 0; border-top: 1px solid var(--rule); }
+  }
+  .figure-value { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .figure-exact { font-size: 12.5px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .provenance {
+    font-size: 11.5px; color: var(--muted); margin-top: 5px;
+    display: flex; gap: 7px; flex-wrap: wrap; align-items: center;
+  }
+  .provenance .file { color: #55514a; font-weight: 500; }
+  .dot { color: var(--rule-2); }
+  .scope { margin-top: 9px; display: flex; gap: 5px; flex-wrap: wrap; }
+  .tag {
+    font-size: 11px; color: #55514a; background: var(--sunk);
+    border: 1px solid var(--rule); border-radius: 2px; padding: 1px 7px;
+  }
+  blockquote {
+    margin: 12px 0 0; padding: 10px 0 2px 14px;
+    border-left: 2px solid var(--rule-2);
+    font-family: var(--serif); font-size: 14.5px; line-height: 1.55; color: #37342e;
+  }
   .evidence blockquote { margin-top: auto; }
-  @media (max-width: 720px) { .evidence { grid-template-columns: 1fr; } }
-  blockquote { margin: 6px 0 0; padding: 9px 12px; background: #f6f6f2; border-left: 3px solid var(--line);
-               border-radius: 0 5px 5px 0; font-size: 13.5px; }
-  .src { font-size: 12px; color: var(--muted); }
-  .val { font-variant-numeric: tabular-nums; font-weight: 600; }
-  .pill { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line);
-          border-radius: 20px; padding: 1px 9px; margin-right: 5px; white-space: nowrap; }
-  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line);
-           vertical-align: top; }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase;
-       letter-spacing: .05em; }
-  input[type=search] { font: inherit; padding: 6px 11px; border: 1px solid var(--line);
-                       border-radius: 7px; background: var(--panel); min-width: 240px; }
-  .empty { color: var(--muted); padding: 30px 0; text-align: center; }
+
+  details { margin-top: 12px; }
+  summary {
+    cursor: pointer; font-size: 11.5px; color: var(--muted);
+    list-style: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▸"; font-size: 9px; color: var(--rule-2); }
+  details[open] summary::before { content: "▾"; }
+  summary:hover { color: var(--ink); }
+  pre {
+    margin: 10px 0 0; background: var(--sunk); border: 1px solid var(--rule);
+    padding: 12px 14px; overflow: auto; font-family: var(--mono);
+    font-size: 11.5px; line-height: 1.5; color: #45413a;
+  }
+
+  /* ---------------------------------------------------------- controls */
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+  button {
+    font: inherit; font-size: 13px; color: #45413a; background: var(--panel);
+    border: 1px solid var(--rule-2); border-radius: 2px; padding: 5px 12px; cursor: pointer;
+  }
+  button:hover { border-color: #b3ae9f; color: var(--ink); }
+  button[aria-pressed="true"] {
+    background: var(--accent); border-color: var(--accent); color: #f6f8f6;
+  }
+  input[type=search] {
+    font: inherit; font-size: 13px; padding: 5px 11px; min-width: 230px;
+    border: 1px solid var(--rule-2); border-radius: 2px;
+    background: var(--panel); color: var(--ink);
+  }
+  input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .spacer { flex: 1; }
+
+  /* ---------------------------------------------------------- listings */
+  .rel { border: 1px solid var(--rule); background: var(--panel); margin-bottom: 10px; }
+  .rel-head {
+    display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+    padding: 11px 16px; border-bottom: 1px solid var(--rule); background: var(--panel);
+  }
+  .rel-why { padding: 13px 16px 0; font-family: var(--serif); font-size: 14.5px; color: #33302a; }
+  .rel .evidence { border: 0; border-top: 1px solid var(--rule); margin-top: 13px; }
+  .rel details { padding: 0 16px 13px; margin-top: 0; }
+  .decided { font-size: 10.5px; color: var(--faint); font-family: var(--mono); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--panel); }
+  thead th {
+    text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule-2);
+    font-size: 10.5px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .1em;
+  }
+  td { padding: 11px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  tbody tr:hover { background: var(--sunk); }
+  td blockquote { font-size: 13px; margin-top: 6px; }
+
+  .note { color: var(--muted); font-size: 13.5px; padding: 26px 0; text-align: center;
+          border: 1px dashed var(--rule-2); }
   .warn { color: var(--conflict); }
-  details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
-  pre { background: #f6f6f2; padding: 10px; border-radius: 6px; overflow: auto; font-size: 12px; }
+
+  /* ---------------------------------------------------------- skeleton */
+  .skeleton { border: 1px solid var(--rule); background: var(--panel); padding: 18px; margin-bottom: 10px; }
+  .bar { height: 9px; background: var(--sunk); border-radius: 1px; animation: pulse 1.4s ease-in-out infinite; }
+  .bar + .bar { margin-top: 9px; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+  @media (prefers-reduced-motion: reduce) { .bar { animation: none } }
+
+  /* ---------------------------------------------------------- upload */
+  .drop {
+    border: 1px dashed var(--rule-2); background: var(--panel);
+    padding: 24px; text-align: center; cursor: pointer;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: #f6f8f6; }
+  .drop b { font-weight: 600; }
+  .drop p { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+
+  footer {
+    margin-top: 56px; border-top: 1px solid var(--rule-2); background: var(--panel);
+    font-size: 12.5px; color: var(--muted);
+  }
+  footer .wrap { padding-top: 20px; padding-bottom: 30px; }
+  footer a { color: var(--accent); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
 <body>
-<header>
-  <h1>Fact Knowledge Layer</h1>
-  <div class="sub">Facts pulled from PDFs, tied to the sentence they came from, and compared across documents.</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <h1>Fact Knowledge Layer</h1>
+    <p class="thesis">
+      Reads PDFs, ties every fact to the sentence it came from, and works out whether
+      facts across documents agree, disagree, or only appear to.
+      <em>A difference between two numbers is not called a contradiction until the
+      system has tried to explain it and failed.</em>
+    </p>
+    <div class="ledger" id="ledger" aria-live="polite"></div>
+  </div>
 </header>
 
 <main>
-  <div class="row stats" id="stats"></div>
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Exhibits</div>
+        <h2>The four cases, drawn from the corpus below</h2>
+        <p class="lede">
+          Each is selected at query time by rule — best evidence, spanning two documents
+          where possible. Nothing here is hand-picked, so these rebuild themselves against
+          whatever documents are loaded.
+        </p>
+      </div>
+      <div id="exhibits"></div>
+    </div>
+  </section>
 
-  <div class="drop" id="drop">
-    <b>Drop a PDF here</b> or click to choose one.
-    <div class="sub" id="uploadNote">Each upload is added to the existing knowledge layer, not a fresh one.</div>
-  </div>
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Explore</div>
+        <h2>Everything the layer holds</h2>
+      </div>
 
-  <div class="row tabs">
-    <button data-tab="relations" class="on">Relationships</button>
-    <button data-tab="facts">Facts</button>
-    <button data-tab="quarantine">Quarantined</button>
-    <button data-tab="documents">Documents</button>
-    <span style="flex:1"></span>
-    <input type="search" id="search" placeholder="Search facts…">
-  </div>
+      <div class="controls" role="tablist">
+        <button data-tab="relations" aria-pressed="true">Relationships</button>
+        <button data-tab="facts" aria-pressed="false">Facts</button>
+        <button data-tab="quarantine" aria-pressed="false">Quarantined</button>
+        <button data-tab="documents" aria-pressed="false">Documents</button>
+        <span class="spacer"></span>
+        <input type="search" id="search" placeholder="Search entity, metric or quote…"
+               aria-label="Search facts">
+      </div>
 
-  <div class="row" id="filters" style="margin-bottom:14px"></div>
-  <div id="view"></div>
+      <div class="controls" id="filters"></div>
+      <div id="view"></div>
+      <div class="controls" id="pager" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Add to the layer</div>
+        <h2>Upload your own PDF</h2>
+        <p class="lede">
+          It is added to the existing knowledge layer rather than replacing it, then compared
+          against everything already stored. A short document takes under a minute; a
+          hundred-page report takes several, because free model tiers are paced.
+        </p>
+      </div>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload a PDF">
+        <b>Drop a PDF here, or click to choose one</b>
+        <p id="uploadNote">Text-based PDFs only — there is no OCR.</p>
+      </div>
+    </div>
+  </section>
 </main>
 
-<script>
-const $ = (id) => document.getElementById(id);
-let tab = "relations";
-let verdictFilter = "";
+<footer>
+  <div class="wrap">
+    Verdicts come from rules in <code>reconcile.py</code>, never from a language model,
+    so they are reproducible. The model reads language and copies strings; the code does
+    every conversion, every date and every verdict.
+    <a href="/docs">API reference</a>.
+  </div>
+</footer>
 
-const get = (url) => fetch(url).then((r) => r.json());
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const api = (path) => fetch(path).then((r) => r.ok ? r.json() : Promise.reject(r));
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-function number(claim) {
-  if (claim.value_num === null || claim.value_num === undefined) return esc(claim.value_text || "");
-  const written = claim.value_text ? esc(claim.value_text) : "";
-  const unit = claim.unit === "percent" ? "%" : (claim.unit ? " " + claim.unit : "");
-  const exact = claim.unit === "percent"
-    ? claim.value_num + "%"
-    : claim.value_num.toLocaleString("en-IN", { maximumFractionDigits: 2 }) + unit;
-  return `<span class="val">${written || exact}</span>` +
-         (written ? ` <span class="src">= ${esc(exact)}</span>` : "");
+const PAGE_SIZE = 10;
+let tab = "relations";
+let verdict = "";
+let offset = 0;
+
+/* ------------------------------------------------------------------ pieces */
+
+function figure(claim) {
+  if (!claim) return `<figure><div class="provenance">evidence unavailable</div></figure>`;
+  const value = claim.value_text ? esc(claim.value_text)
+              : (claim.value_num !== null ? exact(claim) : "—");
+  const showExact = claim.value_num !== null && claim.value_text;
+  const scope = Object.entries(claim.scope || {})
+    .map(([k, v]) => `<span class="tag">${esc(k)}: ${esc(v)}</span>`).join("");
+  return `<figure>
+    <div class="figure-value">${value}${showExact ? `<span class="figure-exact">${esc(exact(claim))}</span>` : ""}</div>
+    <div class="provenance">
+      <span class="file">${esc(claim.document?.filename || "—")}</span>
+      <span class="dot">·</span><span>page ${claim.page_no}</span>
+      ${claim.period_label ? `<span class="dot">·</span><span>${esc(claim.period_label)}</span>` : ""}
+    </div>
+    ${scope ? `<div class="scope">${scope}</div>` : ""}
+    <blockquote>${esc(claim.quote)}</blockquote>
+  </figure>`;
 }
 
-function evidence(claim) {
-  if (!claim) return "<div class='src'>missing</div>";
-  const scope = Object.entries(claim.scope || {})
-    .map(([k, v]) => `<span class="pill">${esc(k)}: ${esc(v)}</span>`).join("");
-  return `<div>
-    <div>${number(claim)}</div>
-    <div class="src" style="margin-top:4px">
-      ${esc(claim.document?.filename || "")} · page ${claim.page_no}
-      ${claim.period_label ? " · " + esc(claim.period_label) : ""}
-    </div>
-    <div style="margin-top:6px">${scope}</div>
-    <blockquote>${esc(claim.quote)}</blockquote>
-  </div>`;
+function exact(claim) {
+  if (claim.value_num === null || claim.value_num === undefined) return "";
+  if (claim.unit === "percent") return `${claim.value_num}%`;
+  const n = claim.value_num.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  return claim.unit ? `${n} ${claim.unit}` : n;
 }
+
+function dimensions(diff) {
+  return `<details><summary>Dimensions the engine compared</summary>
+    <pre>${esc(JSON.stringify(diff, null, 2))}</pre></details>`;
+}
+
+/* ---------------------------------------------------------------- exhibits */
+
+const EXHIBITS = [
+  ["corroborated", "A fact corroborated across documents",
+   "Two documents state the same thing in different words. Normalisation makes them comparable, and the figures agree."],
+  ["contradiction", "A genuine contradiction",
+   "Same entity, same metric, same period, same unit and same stated scope — and the numbers still disagree. Nothing is left to explain it."],
+  ["explained", "An apparent contradiction, explained",
+   "The figures differ, but a dimension accounts for it. The engine names which one before anyone calls it a disagreement."],
+  ["failure", "An extraction failure the system caught",
+   "Every claim must quote a sentence that really is on the page it cites. This one did not, so it was quarantined rather than shown as a fact."],
+];
+
+function exhibitCard(index, title, blurb, body) {
+  return `<article class="exhibit">
+    <div class="exhibit-head">
+      <span class="numeral">${String(index + 1).padStart(2, "0")}</span>
+      <span class="exhibit-title">${title}</span>
+      ${body.chips}
+    </div>
+    <p class="exhibit-why">${body.why || blurb}</p>
+    ${body.content}
+  </article>`;
+}
+
+function renderExhibits(data) {
+  $("exhibits").innerHTML = EXHIBITS.map(([key, title, blurb], i) => {
+    const item = data[key];
+    if (!item) {
+      return exhibitCard(i, title, blurb, {
+        chips: "", why: blurb,
+        content: `<div class="note">No example of this case in the documents currently loaded.</div>`,
+      });
+    }
+    if (key === "failure") {
+      return exhibitCard(i, title, blurb, {
+        chips: `<span class="chip QUARANTINED">Quarantined</span>`,
+        why: esc(item.quarantine_reason),
+        content: `<div class="evidence">
+            <figure>
+              <div class="figure-value">${esc(item.entity_label || item.entity)} · ${esc(item.metric_label || item.metric)}</div>
+              <div class="provenance">
+                <span class="file">${esc(item.document?.filename || "—")}</span>
+                <span class="dot">·</span><span>page ${item.page_no}</span>
+                <span class="dot">·</span><span>what the model quoted</span>
+              </div>
+              <blockquote>${esc(item.quote)}</blockquote>
+            </figure>
+            <figure>
+              <div class="figure-value">The page it cited</div>
+              <div class="provenance">as the text actually reads</div>
+              <blockquote>${esc((item.page_text || "").slice(0, 460))}${(item.page_text || "").length > 460 ? "…" : ""}</blockquote>
+            </figure>
+          </div>`,
+      });
+    }
+    return exhibitCard(i, title, blurb, {
+      chips: `<span class="chip ${esc(item.verdict)}">${esc(item.verdict)}</span>
+              <span class="code">${esc(item.reason_code)}</span>`,
+      why: esc(item.explanation),
+      content: `<div class="evidence">${figure(item.claim_a)}${figure(item.claim_b)}</div>
+                ${dimensions(item.dimension_diff)}`,
+    });
+  }).join("");
+}
+
+/* ---------------------------------------------------------------- listings */
 
 function relationCard(rel) {
-  return `<div class="card">
-    <div class="row">
-      <span class="verdict ${esc(rel.verdict)}">${esc(rel.verdict)}</span>
-      <span class="pill">${esc(rel.reason_code)}</span>
-      <span style="flex:1"></span>
-      <span class="src">${esc(rel.decided_by)}</span>
+  return `<article class="rel">
+    <div class="rel-head">
+      <span class="chip ${esc(rel.verdict)}">${esc(rel.verdict)}</span>
+      <span class="code">${esc(rel.reason_code)}</span>
+      <span class="spacer"></span>
+      <span class="decided">${esc(rel.decided_by)}</span>
     </div>
-    <div class="why">${esc(rel.explanation)}</div>
-    <div class="evidence">${evidence(rel.claim_a)}${evidence(rel.claim_b)}</div>
-    <details style="margin-top:10px"><summary>Dimensions compared</summary>
-      <pre>${esc(JSON.stringify(rel.dimension_diff, null, 2))}</pre></details>
-  </div>`;
+    <p class="rel-why">${esc(rel.explanation)}</p>
+    <div class="evidence">${figure(rel.claim_a)}${figure(rel.claim_b)}</div>
+    ${dimensions(rel.dimension_diff)}
+  </article>`;
 }
 
-function factRows(facts) {
-  if (!facts.length) return "<div class='empty'>Nothing here yet.</div>";
+function factTable(rows, quarantined) {
+  if (!rows.length) return `<div class="note">Nothing here yet.</div>`;
   return `<table><thead><tr>
       <th>Entity</th><th>Metric</th><th>Value</th><th>Period</th><th>Evidence</th>
-    </tr></thead><tbody>` +
-    facts.map((f) => `<tr>
-      <td>${esc(f.entity)}</td>
-      <td>${esc(f.metric)}</td>
-      <td>${number(f)}</td>
+    </tr></thead><tbody>${rows.map((f) => `<tr>
+      <td>${esc(f.entity_label || f.entity)}</td>
+      <td>${esc(f.metric_label || f.metric)}</td>
+      <td>${f.value_text ? esc(f.value_text) : esc(exact(f)) || "—"}</td>
       <td>${esc(f.period_label || "—")}</td>
-      <td><div class="src">${esc(f.document?.filename || "")} · p${f.page_no}</div>
-          <blockquote>${esc(f.quote)}</blockquote>
-          ${f.quarantine_reason ? `<div class="warn src" style="margin-top:5px">${esc(f.quarantine_reason)}</div>` : ""}
-      </td></tr>`).join("") + "</tbody></table>";
+      <td>
+        <div class="provenance"><span class="file">${esc(f.document?.filename || "")}</span>
+          <span class="dot">·</span><span>page ${f.page_no}</span></div>
+        <blockquote>${esc(f.quote)}</blockquote>
+        ${quarantined && f.quarantine_reason
+          ? `<div class="provenance warn">${esc(f.quarantine_reason)}</div>` : ""}
+      </td></tr>`).join("")}</tbody></table>`;
 }
 
-async function render() {
-  const search = $("search").value.trim();
-  $("filters").innerHTML = tab === "relations"
-    ? ["", "CONTRADICTS", "RECONCILABLE", "CORROBORATES"].map((v) =>
-        `<button data-verdict="${v}" class="${v === verdictFilter ? "on" : ""}">${v || "All"}</button>`
-      ).join("")
-    : "";
+function documentTable(docs) {
+  if (!docs.length) return `<div class="note">No documents loaded yet.</div>`;
+  return `<table><thead><tr>
+      <th>File</th><th>Title</th><th>Publisher</th><th>Dated</th>
+      <th>Pages</th><th>Status</th>
+    </tr></thead><tbody>${docs.map((d) => `<tr>
+      <td>${esc(d.filename)}</td><td>${esc(d.title || "—")}</td>
+      <td>${esc(d.publisher || "—")}</td><td>${esc(d.doc_date || "—")}</td>
+      <td>${d.page_count}</td><td>${esc(d.status)}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
 
-  const counts = await get("/api/stats");
-  $("stats").innerHTML = [
-    ["documents", "Documents"], ["facts", "Facts"],
-    ["relations", "Relationships"], ["quarantined", "Quarantined"],
-  ].map(([key, label]) =>
-    `<div class="stat"><b>${counts[key]}</b><span>${label}</span></div>`).join("");
+function skeleton(n) {
+  return Array.from({ length: n }, () =>
+    `<div class="skeleton"><div class="bar" style="width:38%"></div>
+     <div class="bar" style="width:88%"></div><div class="bar" style="width:72%"></div></div>`
+  ).join("");
+}
 
+/* ------------------------------------------------------------------ render */
+
+async function ledger() {
+  try {
+    const c = await api("/api/stats");
+    $("ledger").innerHTML = [
+      ["documents", "Documents"], ["facts", "Facts"],
+      ["relations", "Relationships"], ["quarantined", "Quarantined"],
+    ].map(([k, label]) =>
+      `<div><b>${(c[k] ?? 0).toLocaleString("en-IN")}</b><span>${label}</span></div>`
+    ).join("");
+  } catch { $("ledger").innerHTML = ""; }
+}
+
+async function exhibits() {
+  $("exhibits").innerHTML = skeleton(2);
+  try { renderExhibits(await api("/api/highlights")); }
+  catch { $("exhibits").innerHTML = `<div class="note">Could not load the exhibits.</div>`; }
+}
+
+function filterBar() {
+  $("filters").innerHTML = tab !== "relations" ? "" :
+    ["", "CONTRADICTS", "RECONCILABLE", "CORROBORATES"].map((v) =>
+      `<button data-verdict="${v}" aria-pressed="${v === verdict}">${v || "All verdicts"}</button>`
+    ).join("");
+}
+
+async function listing() {
   const view = $("view");
-  if (tab === "relations") {
-    const rows = await get("/api/relations" + (verdictFilter ? "?verdict=" + verdictFilter : ""));
-    view.innerHTML = rows.length
-      ? rows.map(relationCard).join("")
-      : "<div class='empty'>No relationships yet. Upload two documents that talk about the same thing.</div>";
-  } else if (tab === "documents") {
-    const docs = await get("/api/documents");
-    view.innerHTML = docs.length ? `<table><thead><tr>
-        <th>File</th><th>Title</th><th>Publisher</th><th>Dated</th><th>Pages</th><th>Status</th>
-      </tr></thead><tbody>` + docs.map((d) => `<tr>
-        <td>${esc(d.filename)}</td><td>${esc(d.title || "—")}</td>
-        <td>${esc(d.publisher || "—")}</td><td>${esc(d.doc_date || "—")}</td>
-        <td>${d.page_count}</td><td>${esc(d.status)}</td></tr>`).join("") + "</tbody></table>"
-      : "<div class='empty'>No documents yet.</div>";
-  } else {
-    const status = tab === "quarantine" ? "quarantined" : "active";
-    const query = "?status=" + status + (search ? "&search=" + encodeURIComponent(search) : "");
-    view.innerHTML = factRows(await get("/api/claims" + query));
+  view.innerHTML = skeleton(3);
+  const search = $("search").value.trim();
+  const page = `limit=${PAGE_SIZE}&offset=${offset}`;
+  try {
+    if (tab === "relations") {
+      const rows = await api(`/api/relations?${page}${verdict ? "&verdict=" + verdict : ""}`);
+      view.innerHTML = rows.length ? rows.map(relationCard).join("")
+        : `<div class="note">No relationships of this kind.</div>`;
+      pager(rows.length);
+    } else if (tab === "documents") {
+      view.innerHTML = documentTable(await api("/api/documents"));
+      $("pager").innerHTML = "";
+    } else {
+      const quarantined = tab === "quarantine";
+      const status = quarantined ? "quarantined" : "active";
+      const rows = await api(`/api/claims?status=${status}&${page}` +
+        (search ? `&search=${encodeURIComponent(search)}` : ""));
+      view.innerHTML = factTable(rows, quarantined);
+      pager(rows.length);
+    }
+  } catch {
+    view.innerHTML = `<div class="note">Could not load this view.</div>`;
   }
 }
 
+function pager(count) {
+  const back = offset > 0;
+  const forward = count === PAGE_SIZE;
+  $("pager").innerHTML = (back || forward)
+    ? `<button id="prev" ${back ? "" : "disabled"}>← Previous</button>
+       <button id="next" ${forward ? "" : "disabled"}>Next →</button>
+       <span class="decided">showing ${offset + 1}–${offset + count}</span>` : "";
+  if (back) $("prev").onclick = () => { offset = Math.max(0, offset - PAGE_SIZE); listing(); };
+  if (forward) $("next").onclick = () => { offset += PAGE_SIZE; listing(); };
+}
+
+/* -------------------------------------------------------------- behaviour */
+
 document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => {
-  tab = b.dataset.tab;
-  document.querySelectorAll("[data-tab]").forEach((o) => o.classList.toggle("on", o === b));
-  render();
+  tab = b.dataset.tab; offset = 0;
+  document.querySelectorAll("[data-tab]").forEach((o) =>
+    o.setAttribute("aria-pressed", String(o === b)));
+  filterBar(); listing();
 });
+
 $("filters").onclick = (e) => {
-  if (!e.target.dataset.verdict && e.target.dataset.verdict !== "") return;
-  verdictFilter = e.target.dataset.verdict;
-  render();
+  const chosen = e.target.dataset?.verdict;
+  if (chosen === undefined) return;
+  verdict = chosen; offset = 0; filterBar(); listing();
 };
-$("search").oninput = () => { if (tab !== "relations") render(); };
+
+let typing;
+$("search").oninput = () => {
+  if (tab === "relations" || tab === "documents") return;
+  clearTimeout(typing);
+  typing = setTimeout(() => { offset = 0; listing(); }, 250);
+};
 
 const drop = $("drop");
 const picker = Object.assign(document.createElement("input"),
   { type: "file", accept: "application/pdf", hidden: true });
 document.body.appendChild(picker);
 drop.onclick = () => picker.click();
+drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); picker.click(); } };
 picker.onchange = () => picker.files[0] && upload(picker.files[0]);
 drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
 drop.ondragleave = () => drop.classList.remove("over");
 drop.ondrop = (e) => {
-  e.preventDefault();
-  drop.classList.remove("over");
+  e.preventDefault(); drop.classList.remove("over");
   if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]);
 };
 
 async function upload(file) {
   const note = $("uploadNote");
-  note.textContent = `Reading ${file.name}… large reports take a few minutes.`;
-  const body = new FormData();
-  body.append("file", file);
-  const response = await fetch("/api/documents", { method: "POST", body });
-  const result = await response.json();
-  if (!response.ok) {
-    note.innerHTML = `<span class="warn">${esc(result.detail || "Upload failed.")}</span>`;
-    return;
+  const started = Date.now();
+  const tick = setInterval(() => {
+    note.textContent = `Reading ${file.name}… ${Math.round((Date.now() - started) / 1000)}s elapsed.`;
+  }, 1000);
+  note.textContent = `Reading ${file.name}…`;
+  try {
+    const body = new FormData();
+    body.append("file", file);
+    const response = await fetch("/api/documents", { method: "POST", body });
+    const result = await response.json();
+    clearInterval(tick);
+    if (!response.ok) {
+      note.innerHTML = `<span class="warn">${esc(result.detail || "Upload failed.")}</span>`;
+      return;
+    }
+    note.textContent =
+      `${file.name}: ${result.page_count} pages, ${result.claims_extracted} facts, ` +
+      `${result.claims_quarantined} quarantined, ${result.relations_created} new relationships.` +
+      (result.note ? ` ${result.note}` : "");
+    offset = 0;
+    ledger(); exhibits(); listing();
+  } catch (err) {
+    clearInterval(tick);
+    note.innerHTML = `<span class="warn">Upload failed: ${esc(err.message || err)}</span>`;
   }
-  note.textContent =
-    `${file.name}: ${result.page_count} pages, ${result.claims_extracted} facts, ` +
-    `${result.claims_quarantined} quarantined, ${result.relations_created} new relationships` +
-    (result.note ? ` — ${result.note}` : "");
-  render();
 }
 
-render();
+filterBar();
+ledger();
+exhibits();
+listing();
 </script>
 </body>
 </html>

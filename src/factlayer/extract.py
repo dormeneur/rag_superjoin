@@ -37,7 +37,10 @@ measurement — something measured or counted.
   entity            who or what the fact is about, as the page names it
   metric            what is measured, as the page labels it
   value             the amount, copied EXACTLY as written ("Rs. 8,142 crore", "6.4%")
-  period            the period it covers, as written ("FY24", "Q4 FY24", "as of March 31, 2024")
+  period            the period it covers, as written ("FY24", "Q4 FY24", "as of March 31, 2024").
+                    If a table ROW names its own period — a month, a quarter, a date —
+                    use the row's period, not the heading's. A monthly table has twelve
+                    different periods, not twelve figures for one year.
   scope             qualifiers the page attaches to it, as free key/value pairs, e.g.
                     {"consolidation": "consolidated"}, {"revision": "provisional"},
                     {"basis": "estimate"}, {"segment": "express parcel"}
@@ -60,7 +63,13 @@ Rules
 - Copy. Do not convert units, do not compute totals, do not restate in your own words.
 - If the value is not written on the page, do not report the fact.
 - A group is not one fact: give each board member, each segment, each year its own entry.
+- In a table, what makes a row different from the row above it — its month, its
+  segment, its subsidiary — belongs in period or scope. Without it the rows become
+  the same fact disagreeing with itself.
 - Ignore page furniture: headers, footers, page numbers, tables of contents.
+- "entity" and "metric" are what the PAGE calls them, in the page's own words and
+  capitalisation ("Revenue from operations", not "revenue_from_operations"). The
+  snake_case key belongs only in entity_canonical / metric_canonical.
 - entity_canonical and metric_canonical are stable snake_case keys. REUSE a key from
   the known list below whenever it means the same thing, even if this page words it
   differently. Only coin a new key when nothing in the list fits. Keys never contain

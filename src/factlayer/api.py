@@ -105,6 +105,36 @@ def relation_detail(relation_id: str) -> dict:
     return _relation(store, row)
 
 
+# ------------------------------------------------------------------- showcase
+
+
+@app.get("/api/highlights")
+def highlights() -> dict:
+    """One real example of each of the four cases the assignment asks to see.
+
+    Chosen by rule from whatever is stored, so this works on an uploaded corpus as
+    well as on the starter documents. Nothing here is hard-coded.
+    """
+    store = Store()
+    picks = store.showcase()
+    hydrated: dict = {}
+    for name in ("corroborated", "contradiction", "explained"):
+        row = picks[name]
+        hydrated[name] = _relation(store, row) if row else None
+
+    failure = picks["failure"]
+    if failure:
+        claim = store.claim(failure["id"])
+        hydrated["failure"] = _claim(store, claim) if claim else None
+        if hydrated["failure"]:
+            hydrated["failure"]["page_text"] = store.page_text(
+                claim.doc_id, claim.page_no
+            )
+    else:
+        hydrated["failure"] = None
+    return hydrated
+
+
 # ---------------------------------------------------------------------- the ui
 
 

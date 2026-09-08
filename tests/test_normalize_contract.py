@@ -126,3 +126,34 @@ def test_normalize_metric_keeps_qualifiers():
     """'Total income' and 'income' are different line items. Stripping words like
     'total' would silently merge distinct metrics."""
     assert normalize_metric("Total income") != normalize_metric("Income")
+
+
+# ------------------------------------------------------- labels people read
+
+from factlayer.normalize import readable
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("shares_offered", "Shares offered"),
+        ("corporate_identity_number", "Corporate identity number"),
+        ("revenue_from_operations", "Revenue from operations"),
+        ("EBITDA_margin", "EBITDA margin"),
+        ("real_gdp_growth", "Real gdp growth"),
+    ],
+)
+def test_a_snake_case_key_is_made_readable(raw, expected):
+    """Models return the canonical key in the human-readable field too. Showing
+    'shares_offered' to a reader is showing them the plumbing."""
+    assert readable(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["Revenue from operations", "Delhivery Limited", "EBITDA", "Q4 FY24 revenue", ""],
+)
+def test_a_label_the_document_actually_wrote_is_left_alone(raw):
+    """Anything with a space is already how the page words it, and must not be
+    reformatted."""
+    assert readable(raw) == raw

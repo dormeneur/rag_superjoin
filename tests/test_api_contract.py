@@ -179,3 +179,40 @@ def test_the_ui_is_served_from_the_same_server(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
+
+
+# ---------------------------------------------------------------- the showcase
+
+def test_highlights_are_available_on_an_empty_layer(client):
+    """A freshly deployed site has nothing ingested yet and must still answer."""
+    body = client.get("/api/highlights").json()
+    assert set(body) == {"corroborated", "contradiction", "explained", "failure"}
+    assert all(value is None for value in body.values())
+
+
+def test_highlights_carry_full_evidence(client, fake_llm, pdf_bytes):
+    conflicting = PAGE.replace("8,142", "7,900")
+    fake_llm({
+        "8,142": CLAIM,
+        "7,900": [{**CLAIM[0], "value": "Rs. 7,900 crore", "quote": conflicting}],
+    })
+    upload(client, pdf_bytes([PAGE]), "a.pdf")
+    upload(client, pdf_bytes([conflicting]), "b.pdf")
+
+    contradiction = client.get("/api/highlights").json()["contradiction"]
+    assert contradiction is not None
+    assert contradiction["explanation"]
+    for side in ("claim_a", "claim_b"):
+        assert contradiction[side]["quote"]
+        assert contradiction[side]["document"]["filename"]
+        assert contradiction[side]["page_no"] >= 1
+
+
+def test_the_failure_highlight_includes_its_page_for_context(client, fake_llm, pdf_bytes):
+    """Case four is only convincing if you can see the page the model misquoted."""
+    fake_llm({"8,142": [{**CLAIM[0], "quote": "a sentence that is not in the pdf"}]})
+    upload(client, pdf_bytes([PAGE]))
+
+    failure = client.get("/api/highlights").json()["failure"]
+    assert failure["quarantine_reason"]
+    assert failure["page_text"]

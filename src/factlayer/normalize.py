@@ -256,6 +256,23 @@ def normalize_metric(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
+def readable(label: str) -> str:
+    """Present a canonical key as something a person would read.
+
+    Models return the snake_case key in the human-readable field as well as the key
+    field, so "shares_offered" reaches the page. Labels the document actually wrote
+    contain spaces and are left exactly as they are. Tokens that are already
+    upper-case, like EBITDA, keep their case.
+    """
+    if not label or " " in label or "_" not in label:
+        return label
+    words = [word for word in label.split("_") if word]
+    if not words:
+        return label
+    first = words[0] if words[0].isupper() else words[0].capitalize()
+    return " ".join([first, *words[1:]])
+
+
 def normalize_value_text(value: str) -> str:
     """Loose comparison for written values, so 'Director & CEO' matches 'Director and
     CEO' without treating a genuinely different role as the same."""

@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from . import config
+from .normalize import readable
 from .pdf import Page
 
 SCHEMA = """
@@ -144,8 +145,10 @@ class Claim:
             "doc_id": self.doc_id,
             "kind": self.kind,
             "entity": self.entity,
+            "entity_label": readable(self.entity),
             "entity_canonical": self.entity_canonical,
             "metric": self.metric,
+            "metric_label": readable(self.metric),
             "metric_canonical": self.metric_canonical,
             "value_num": self.value_num,
             "unit": self.unit,
@@ -372,6 +375,83 @@ class Store:
             "SELECT * FROM relations WHERE id = ?", (relation_id,)
         ).fetchone()
         return _relation_row(row) if row else None
+
+    # ------------------------------------------------------------------ showcase
+
+    # Reconcilable differences, best first. A difference explained by scope or by a
+    # role changing over time shows the engine reasoning; a year against its own
+    # fourth quarter is closer to arithmetic.
+    EXPLAINED_PREFERENCE = [
+        "SCOPE_MISMATCH",
+        "TEMPORAL_SUCCESSION",
+        "TEMPORAL_SUCCESSION_INFERRED",
+        "CURRENCY_MISMATCH",
+        "SCOPE_UNDECLARED",
+        "PERIOD_UNDECLARED",
+        "UNIT_UNKNOWN",
+        "PERIOD_MISMATCH",
+        "ATTRIBUTE_AGREEMENT",
+    ]
+
+    def showcase(self) -> dict[str, Any | None]:
+        """One example of each case the assignment asks to see, chosen by rule.
+
+        Picking these by hand would be hard-coding facts and would break the moment
+        someone uploads their own PDFs. Chosen this way, the front page works on any
+        corpus. Ordering is deterministic so the page does not reshuffle on reload.
+        """
+        return {
+            "corroborated": self._best_relation("CORROBORATES"),
+            "contradiction": self._best_relation("CONTRADICTS"),
+            "explained": self._best_relation("RECONCILABLE"),
+            "failure": self._best_failure(),
+        }
+
+    def _best_relation(self, verdict: str) -> dict[str, Any] | None:
+        """Prefer an example spanning two documents: one document agreeing with
+        itself is not what the assignment is asking to see."""
+        preference = {
+            reason: rank for rank, reason in enumerate(self.EXPLAINED_PREFERENCE)
+        }
+        row = self.connection.execute(
+            """
+            SELECT r.*,
+                   (a.doc_id != b.doc_id) AS cross_document,
+                   COALESCE(a.confidence, 0) + COALESCE(b.confidence, 0) AS strength
+            FROM relations r
+            JOIN claims a ON a.id = r.claim_a
+            JOIN claims b ON b.id = r.claim_b
+            WHERE r.verdict = ?
+              AND a.status = 'active' AND b.status = 'active'
+            ORDER BY cross_document DESC,
+                     CASE r.reason_code {cases} ELSE ? END ASC,
+                     strength DESC,
+                     r.id ASC
+            LIMIT 1
+            """.format(
+                cases=" ".join(
+                    f"WHEN '{reason}' THEN {rank}" for reason in preference
+                    for rank in [preference[reason]]
+                )
+            ),
+            (verdict, len(preference)),
+        ).fetchone()
+        return _relation_row(row) if row else None
+
+    def _best_failure(self) -> dict[str, Any] | None:
+        """Case four is an extraction failure the system caught, so it comes from
+        the claims grounding rejected. Without a stated reason there is nothing to
+        show, so those are skipped."""
+        row = self.connection.execute(
+            """
+            SELECT * FROM claims
+            WHERE status = 'quarantined'
+              AND quarantine_reason IS NOT NULL AND quarantine_reason != ''
+            ORDER BY LENGTH(quote) DESC, id ASC
+            LIMIT 1
+            """
+        ).fetchone()
+        return _row_to_claim(row).as_dict() if row else None
 
     def counts(self) -> dict[str, int]:
         totals = {
