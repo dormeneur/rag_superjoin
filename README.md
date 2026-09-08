@@ -88,9 +88,9 @@ Or run the **Deploy to Hugging Face Space** workflow from the Actions tab, havin
 `HF_TOKEN` as a repository secret — no local clone needed.
 
 The Space uses the **Gradio SDK**, because Docker Spaces are a paid feature and Gradio
-Spaces are not. `app.py` unpacks the corpus and serves the same FastAPI application the
-Dockerfile does; Gradio is mounted at `/gradio` only to satisfy the SDK. The Dockerfile
-still works anywhere that takes one.
+Spaces are not. The SDK only decides which image is built and which file is run, so
+`app.py` is a plain FastAPI entry point: it unpacks the corpus and serves the same
+application the Dockerfile does. The Dockerfile still works anywhere that takes one.
 
 Browsing the corpus needs no credentials. To enable uploads on the deployment, add
 `GEMINI_API_KEY` under the Space's *Variables and secrets*.
@@ -206,7 +206,7 @@ extractor lost its place in — which is precisely what a reader should be told.
 has no idea what a DIN is; it flagged this because two claims about one subject disagreed._
 
 _Two honest observations about this case. There is **no cross-document contradiction** in
-the corpus at all. And of the 494 contradictions found, **469 are between two rows of a
+the corpus at all. And of the 492 contradictions found, **478 are between two rows of a
 single table on one page** — the signature of an extractor losing its row, not of a
 document disagreeing with itself. The selection rule knows this and prefers a
 contradiction that spans pages, which is why this one is shown._
@@ -250,6 +250,49 @@ of 5,024 extracted claims (14.8%) were rejected this way, nearly all of them on
 multi-column pages where the text reflows across columns._
 
 
+## Scale, and Growing the Layer
+
+The assignment's four suggested extensions, each with the measurement behind it. All
+figures come from the corpus in `deploy/factlayer.db.gz`.
+
+**Large PDFs without a performance problem.** The unit of work is a page, never a
+document. Pages are read, extracted and marked read one at a time, and the model is
+never shown more than a single page (capped at 12,000 characters), so cost grows with
+page count rather than with document size and nothing has to hold a whole PDF in
+working memory. Four pages are read concurrently. The largest starter document is 100
+pages; the corpus is 511.
+
+**Many PDFs in one knowledge layer.** A new fact is compared only against facts that
+could possibly be about the same thing — comparison is blocked on
+`(entity_canonical, metric_canonical)` before any rule runs. Across this corpus that is
+**23,568 comparisons instead of the 9,161,340** an all-pairs sweep would need, 389x
+fewer, from 4,281 facts falling into 1,672 blocks whose largest holds 104. The ratio
+improves as documents accumulate, because blocks grow far more slowly than the corpus.
+
+**A schema that evolves as new kinds of facts appear.** Nothing document-specific is
+declared in code. These six PDFs produced **218 entity keys, 1,188 metric keys and 258
+distinct scope qualifiers** — `unit`, `consolidation`, `basis`, `sector`, `gender`,
+`organisation`, `revision` — every one of them coined at extraction time. Keys already
+in the database are shown back to the model on the next page, so later pages reuse them
+instead of inventing synonyms, and a qualifier the system has never seen still takes
+part in reconciliation. This is also why there are no embeddings: the vocabulary *is*
+the index.
+
+**New documents incrementally, without rebuilding.** Documents are identified by the
+hash of their bytes, and claims and relations by their content, so re-uploading a file
+is a no-op and a new PDF adds rows and is compared against what is already stored.
+`tests/test_pipeline_offline.py` holds the system to it: ingesting document B leaves
+document A's claim ids untouched. Extraction and reconciliation are separable for the
+same reason — `python -m factlayer reconcile` recompares all 4,281 facts in **2.3
+seconds** without re-reading a single page, and reproduces all 11,514 relations exactly,
+so tuning a verdict rule costs a rebuild instead of a re-extraction.
+
+A fifth extension, not on the list: ingestion is **resumable**. Every page is marked
+read as it is finished, so a document interrupted by an exhausted free tier — or by the
+process being killed — continues from where it stopped when the same file is uploaded
+again, rather than starting over or being silently half-loaded.
+
+
 ## Limitations and Next Steps
 
 **Does not work yet**
@@ -266,7 +309,7 @@ multi-column pages where the text reflows across columns._
   explained, but lost.
 - **Table rows can be misattributed.** The extractor can carry a value from one row onto
   the subject of another. The quote is genuine and on the page, so grounding cannot catch
-  it — and this is the dominant failure mode by volume: 469 of the 494 contradictions
+  it — and this is the dominant failure mode by volume: 478 of the 492 contradictions
   found are between two rows of one table. The selection rule works around it by
   preferring contradictions that span pages, but the underlying facts are still wrong.
 - **Near-identical metric names once merged wrongly.** "water intensity per rupee of
