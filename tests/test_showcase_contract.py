@@ -248,3 +248,72 @@ def test_the_failure_shown_has_a_quote_someone_will_read():
                    quarantine_reason="not on the page"),
     )
     assert store.showcase()["failure"]["page_no"] == 3
+
+
+def test_a_numeric_agreement_is_preferred_to_a_matching_string():
+    """Two documents agreeing on a figure had to survive unit normalisation, period
+    alignment and the tolerance rule. Two documents repeating an identifier is string
+    equality. The first demonstrates more of the system, so it is what gets shown."""
+    store = seeded()
+    a_id, b_id = doc_ids(store)
+    text_a, text_b, num_a, num_b = stored(
+        store,
+        make_claim(doc_id=a_id, kind="attribute", metric_canonical="din",
+                   value_num=None, value_text="05131571", page_no=1),
+        make_claim(doc_id=b_id, kind="attribute", metric_canonical="din",
+                   value_num=None, value_text="05131571", page_no=2),
+        make_claim(doc_id=a_id, metric_canonical="real_gdp_growth", value_num=6.5,
+                   unit="percent", page_no=3),
+        make_claim(doc_id=b_id, metric_canonical="real_gdp_growth", value_num=6.5,
+                   unit="percent", page_no=4),
+    )
+    link(store, text_a, text_b, "CORROBORATES", "ATTRIBUTE_AGREEMENT")
+    link(store, num_a, num_b, "CORROBORATES", "VALUE_AGREEMENT")
+
+    picked = store.showcase()["corroborated"]
+    assert picked["reason_code"] == "VALUE_AGREEMENT"
+
+
+def test_a_numeric_conflict_is_preferred_to_a_conflicting_string():
+    store = seeded()
+    a_id, b_id = doc_ids(store)
+    text_a, text_b, num_a, num_b = stored(
+        store,
+        make_claim(doc_id=a_id, kind="attribute", metric_canonical="din",
+                   value_num=None, value_text="0001", page_no=1),
+        make_claim(doc_id=b_id, kind="attribute", metric_canonical="din",
+                   value_num=None, value_text="0002", page_no=2),
+        make_claim(doc_id=a_id, metric_canonical="fiscal_balance", value_num=6.5,
+                   unit="percent", value_text="6.5%", page_no=3),
+        make_claim(doc_id=b_id, metric_canonical="fiscal_balance", value_num=9.1,
+                   unit="percent", value_text="9.1 per cent", page_no=4),
+    )
+    link(store, text_a, text_b, "CONTRADICTS", "ATTRIBUTE_VALUE_CONFLICT")
+    link(store, num_a, num_b, "CONTRADICTS", "VALUE_CONFLICT")
+
+    assert store.showcase()["contradiction"]["reason_code"] == "VALUE_CONFLICT"
+
+
+def test_a_fact_written_differently_is_preferred_to_an_identical_string():
+    """The assignment asks for a fact corroborated across documents "even if
+    expressed differently". Two documents printing the same characters demonstrate
+    nothing; "$706 billion" against "USD 704.9 billion" demonstrates the whole
+    normalisation path."""
+    store = seeded()
+    a_id, b_id = doc_ids(store)
+    same_a, same_b, diff_a, diff_b = stored(
+        store,
+        make_claim(doc_id=a_id, metric_canonical="holding", value_num=100000.0,
+                   unit=None, value_text="100,000", page_no=1),
+        make_claim(doc_id=b_id, metric_canonical="holding", value_num=100000.0,
+                   unit=None, value_text="100,000", page_no=2),
+        make_claim(doc_id=a_id, metric_canonical="reserves", value_num=7.06e11,
+                   unit="USD", value_text="$706 billion", page_no=3),
+        make_claim(doc_id=b_id, metric_canonical="reserves", value_num=7.049e11,
+                   unit="USD", value_text="USD 704.9 billion", page_no=4),
+    )
+    link(store, same_a, same_b, "CORROBORATES", "VALUE_AGREEMENT")
+    link(store, diff_a, diff_b, "CORROBORATES", "VALUE_AGREEMENT")
+
+    picked = store.showcase()["corroborated"]
+    assert {picked["claim_a"], picked["claim_b"]} == {diff_a.id, diff_b.id}

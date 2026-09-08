@@ -98,6 +98,12 @@ def _compare_measurements(a, b, diff, tolerance, percent_tolerance) -> Verdict:
     if diff["value"]["agrees"]:
         return Verdict(CORROBORATES, "VALUE_AGREEMENT", diff)
 
+    if _mirrored(a.value_num, b.value_num, tolerance):
+        # Financial statements bracket a figure to show it is being deducted, so the
+        # same amount reaches the layer as 3,032.19 on one page and (3,032.19) on
+        # another. That is one figure presented two ways, not two claims in conflict.
+        return Verdict(RECONCILABLE, "SIGN_CONVENTION", diff)
+
     if period["relation"] == "undeclared":
         # A running total states no period; an individual transaction states a date.
         # Comparing them as though they covered the same span invents a conflict.
@@ -116,6 +122,14 @@ def _compare_measurements(a, b, diff, tolerance, percent_tolerance) -> Verdict:
         return Verdict(RECONCILABLE, "SCOPE_UNDECLARED", diff)
 
     return Verdict(CONTRADICTS, "VALUE_CONFLICT", diff)
+
+
+def _mirrored(left: float, right: float, tolerance: float) -> bool:
+    """The same magnitude carrying opposite signs."""
+    if left == 0 or right == 0 or (left > 0) == (right > 0):
+        return False
+    scale = max(abs(left), abs(right))
+    return abs(abs(left) - abs(right)) / scale <= tolerance
 
 
 def _compare_values(a, b, tolerance, percent_tolerance) -> dict[str, Any]:
@@ -248,6 +262,10 @@ def describe(a: Claim, b: Claim, verdict: Verdict) -> str:
         )
         return (f"The documents qualify this differently ({pairs}), so {left} and "
                 f"{right} are not directly comparable and this is not a disagreement.")
+    if reason == "SIGN_CONVENTION":
+        return (f"{left} and {right} are the same amount with opposite signs. In a "
+                f"financial statement a bracketed figure is one being deducted, so "
+                f"this is one number presented two ways rather than a disagreement.")
     if reason == "PERIOD_UNDECLARED":
         stated = a.period_label or b.period_label
         return (f"{left} and {right} are both reported for {subject}, but "

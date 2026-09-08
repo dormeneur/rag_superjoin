@@ -390,3 +390,34 @@ def test_a_stated_shared_period_still_allows_a_contradiction():
     a = make_claim(value_num=8.142e10)
     b = make_claim(value_num=7.900e10)
     assert verdict_of(a, b) == "CONTRADICTS"
+
+
+# ------------------------------------------------ accounting sign conventions
+
+def test_the_same_magnitude_with_opposite_signs_is_a_convention_not_a_dispute():
+    """Financial statements bracket a figure to mean it is being deducted. The same
+    amount appearing as 3,032.19 on one page and (3,032.19) on another is one figure
+    presented two ways, and calling it a contradiction misreads the notation."""
+    a = make_claim(value_num=3032.19, unit=None, value_text="3,032.19")
+    b = make_claim(value_num=-3032.19, unit=None, value_text="(3,032.19)")
+    assert verdict_of(a, b) == "RECONCILABLE"
+    assert reason_of(a, b) == "SIGN_CONVENTION"
+
+
+def test_a_sign_flip_of_a_different_magnitude_is_still_a_contradiction():
+    """The excuse is only available when the magnitudes actually match."""
+    a = make_claim(value_num=3032.19, unit=None)
+    b = make_claim(value_num=-2954.52, unit=None)
+    assert verdict_of(a, b) == "CONTRADICTS"
+
+
+def test_two_positive_figures_that_differ_are_still_a_contradiction():
+    a = make_claim(value_num=3032.19, unit=None)
+    b = make_claim(value_num=2954.52, unit=None)
+    assert verdict_of(a, b) == "CONTRADICTS"
+
+
+def test_zero_against_zero_is_agreement_not_a_sign_convention():
+    a = make_claim(value_num=0.0, unit=None)
+    b = make_claim(value_num=0.0, unit=None)
+    assert verdict_of(a, b) == "CORROBORATES"

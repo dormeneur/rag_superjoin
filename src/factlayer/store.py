@@ -378,19 +378,26 @@ class Store:
 
     # ------------------------------------------------------------------ showcase
 
-    # Reconcilable differences, best first. A difference explained by scope or by a
-    # role changing over time shows the engine reasoning; a year against its own
-    # fourth quarter is closer to arithmetic.
-    EXPLAINED_PREFERENCE = [
+    # Reasons ranked by how much of the engine they demonstrate, best first.
+    # A numeric agreement or conflict had to survive unit normalisation, period
+    # alignment and the tolerance rule, where the attribute equivalents are string
+    # comparison. Among reconcilable differences, one explained by scope or by a role
+    # changing over time shows real reasoning; a year against its own fourth quarter
+    # is closer to arithmetic.
+    REASON_PREFERENCE = [
+        "VALUE_AGREEMENT",
+        "VALUE_CONFLICT",
         "SCOPE_MISMATCH",
         "TEMPORAL_SUCCESSION",
         "TEMPORAL_SUCCESSION_INFERRED",
         "CURRENCY_MISMATCH",
+        "SIGN_CONVENTION",
         "SCOPE_UNDECLARED",
         "PERIOD_UNDECLARED",
         "UNIT_UNKNOWN",
         "PERIOD_MISMATCH",
         "ATTRIBUTE_AGREEMENT",
+        "ATTRIBUTE_VALUE_CONFLICT",
     ]
 
     def showcase(self) -> dict[str, Any | None]:
@@ -411,14 +418,20 @@ class Store:
         """Prefer an example spanning two documents: one document agreeing with
         itself is not what the assignment is asking to see. Failing that, prefer one
         spanning two pages — two rows of a single table disagreeing is usually the
-        extractor losing track of which row it was reading, not a real dispute."""
+        extractor losing track of which row it was reading, not a real dispute.
+
+        Within that, prefer a pair the two documents worded differently. The
+        assignment asks for a fact corroborated "even if expressed differently", and
+        two documents printing the same characters demonstrate nothing about
+        normalisation."""
         preference = {
-            reason: rank for rank, reason in enumerate(self.EXPLAINED_PREFERENCE)
+            reason: rank for rank, reason in enumerate(self.REASON_PREFERENCE)
         }
         row = self.connection.execute(
             """
             SELECT r.*,
                    (a.doc_id != b.doc_id) AS cross_document,
+                   (a.value_text IS NOT b.value_text) AS worded_differently,
                    (a.page_no != b.page_no) AS cross_page,
                    COALESCE(a.confidence, 0) + COALESCE(b.confidence, 0) AS strength
             FROM relations r
@@ -427,6 +440,7 @@ class Store:
             WHERE r.verdict = ?
               AND a.status = 'active' AND b.status = 'active'
             ORDER BY cross_document DESC,
+                     worded_differently DESC,
                      cross_page DESC,
                      CASE r.reason_code {cases} ELSE ? END ASC,
                      strength DESC,

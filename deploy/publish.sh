@@ -26,6 +26,12 @@ staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 
 git -C "$root" archive HEAD | tar -x -C "$staging"
+
+# The Space is a deployment, not a copy of the repository. Only what the container
+# runs is pushed: the source PDFs and the test suite are twenty megabytes the image
+# never reads, and the corpus already holds everything extracted from them.
+rm -rf "$staging/data" "$staging/docs" "$staging/tests"
+
 # A Space is identified by the YAML header of its README, which the project's own
 # README must not carry.
 cp "$root/deploy/factlayer.db.gz" "$staging/deploy/factlayer.db.gz"

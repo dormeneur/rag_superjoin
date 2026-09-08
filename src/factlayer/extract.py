@@ -238,16 +238,27 @@ def _canonical(proposed, fallback: str, known: list[str]) -> str:
     """Keep the vocabulary from fragmenting into near-duplicates.
 
     The model is asked to reuse an existing key; this catches the cases where it
-    coins a spelling variant anyway. Names whose digits differ are never merged, so
-    two keys that accidentally carry a year stay apart.
+    coins a spelling variant anyway. The cost is not symmetric: under-merging leaves
+    two facts that never meet, while over-merging invents a contradiction between
+    facts that were never about the same thing. So the guards err towards apart.
+
+    Similarity alone is not enough. "water_intensity_per_rupee_of_turnover" and
+    "waste_intensity_per_rupee_of_turnover" are 97% alike and measure different
+    things; merging them reported the two as contradicting each other. The leading
+    word carries the meaning, so it has to match exactly, and so do any digits.
     """
     name = normalize_metric(_clean(proposed) or "") or fallback
     if not name or not known:
         return name
     match = process.extractOne(name, known, scorer=fuzz.ratio, score_cutoff=MERGE_THRESHOLD)
-    if match and _digits(match[0]) == _digits(name):
+    if match and _digits(match[0]) == _digits(name) and _head(match[0]) == _head(name):
         return match[0]
     return name
+
+
+def _head(name: str) -> str:
+    """The first word of a key, which is what it is chiefly about."""
+    return name.split("_", 1)[0]
 
 
 def _clean(value) -> str:

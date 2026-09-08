@@ -140,26 +140,29 @@ modules and a command line, with no framework beyond FastAPI and no vector datab
 
 ## The Four Cases
 
-All four are taken verbatim from the live system, and all four are chosen by rule rather
-than by hand — the front page recomputes them against whatever documents are loaded. The
-corpus below is the six starter PDFs: 511 pages, 4,281 facts, 11,569 relationships.
+All four are taken verbatim from the running system, and all four are chosen by rule
+rather than by hand — the front page recomputes them against whatever documents are
+loaded, including ones you upload. The corpus here is the six starter PDFs: 511 pages,
+4,281 facts, 11,514 relationships.
 
 ### 1. A fact corroborated across documents
 
-**CORROBORATES** · `ATTRIBUTE_AGREEMENT` · decided by rules
+**CORROBORATES** · `VALUE_AGREEMENT` · decided by rules
 
-Both documents state Sahil Barua's DIN as 05131571.
+Both documents report India · Foreign exchange reserves for the same period as $706 billion (7.06e+11 USD) and USD 704.9 billion (7.049e+11 USD). Once magnitudes and units are normalised these are the same figure.
 
-- **05131571** — Sahil Barua · DIN  
-  <sub>`01-delhivery-prospectus-2022-excerpt.pdf` p.30</sub>
-  > Sahil Barua 05131571 House No. 367/4, B5 Plot No., Villa No. 9,
+- **$706 billion** — India · Foreign exchange reserves  
+  <sub>`03-imf-india-2025-article-iv-excerpt.pdf` p.12</sub>
+  > In 2024Q4 and 2025Q1, the Indian rupee experienced depreciation pressure, and foreign exchange (FX) reserves declined to $668 billion in March 2025, from $706 billion in September 2024 on significant currency intervention.
 
-- **05131571** — Sahil Barua · DIN  
-  <sub>`02-delhivery-annual-report-fy24-excerpt.pdf` p.28</sub>
-  > DIN: 05131571
+- **USD 704.9 billion** — India · Foreign exchange reserves  
+  <sub>`01-india-economic-survey-2024-25-excerpt.pdf` p.31</sub>
+  > As a result of stable capital flows, India’s foreign exchange reserves increased from USD 616.7 billion at the end of January 2024 to USD 704.9 billion in September 2024 before moderating to USD 634.6 billion as on 3 January 2025.
 
-_Two filings two years apart, one written as a line in an address table and the other as a
-labelled field. Same fact, different shapes._
+_The IMF and the Economic Survey, written months apart by different institutions, each
+state India's September 2024 reserves — one as `$706 billion`, the other as
+`USD 704.9 billion`. Normalisation makes them comparable and they land 0.16% apart,
+inside tolerance. Neither document mentions the other._
 
 ### 2. A genuine contradiction
 
@@ -175,14 +178,16 @@ Kapil Bharati's DIN is given as '02227607' and '01432123' for the same time, and
   <sub>`01-delhivery-prospectus-2022-excerpt.pdf` p.85</sub>
   > DIN: 01432123
 
-_Both pages are in the same prospectus, and they cannot both be right. Reading page 85
-suggests the second DIN belongs to a different director, so the likeliest cause is the
-extractor losing its place in a table — which is exactly the kind of thing worth being
-told about. The system has no idea what a DIN is; it flagged this because two claims
-about one subject disagreed._
+_Both pages are in the same prospectus and they cannot both be right. Page 85 suggests
+the second number belongs to a different director, so the likeliest cause is a table the
+extractor lost its place in — which is precisely what a reader should be told. The system
+has no idea what a DIN is; it flagged this because two claims about one subject disagreed._
 
-_Across the six documents the engine reports **no** cross-document contradiction. That
-is a real result, not a gap in the demo: the largest blocker is `UNIT_UNKNOWN`, below._
+_Two honest observations about this case. There is **no cross-document contradiction** in
+the corpus at all. And of the 494 contradictions found, **469 are between two rows of a
+single table on one page** — the signature of an extractor losing its row, not of a
+document disagreeing with itself. The selection rule knows this and prefers a
+contradiction that spans pages, which is why this one is shown._
 
 ### 3. An apparent contradiction, explained by context
 
@@ -198,11 +203,11 @@ The documents qualify this differently (unit: ₹ in Million versus ₹ Cr), so 
   <sub>`03-delhivery-q4-fy24-earnings-presentation.pdf` p.15 · FY2024 · unit: ₹ Cr</sub>
   > Adjusted EBITDA (217) (125) (67) 6 (25) (13) 92 21 (404) 76
 
-_This is the engine doing its job. The two documents report the same measure for the same
-year, one in millions and one in crore, and the engine refused to call that a
-disagreement. It is also honest about its limit: 757.86 million and 76 crore are the same
-amount, and a sharper version would have converted the units and called it corroboration
-rather than stopping at "these are qualified differently"._
+_The engine doing its job. Two documents report the same measure for the same year, one
+in millions and one in crore, and it declined to call that a disagreement. It is also
+honest about its ceiling: 757.86 million and 76 crore are the same amount, and a sharper
+version would have converted the units and called it corroboration instead of stopping at
+"qualified differently"._
 
 ### 4. An extraction failure, and how it is handled
 
@@ -216,11 +221,11 @@ The model reported `Delhivery Limited · Revenue from operations = 66,586.61` in
 That sentence is not on the page. What the page actually holds:
 
 > Corporate Overview Statutory Reports Financial Statements Directors’ Report Dear Members, y Proprietary logistics operating system: In-house logistics of your Company function as managed marketplaces that Delhivery Limited (“Company”/“Delhivery”) technology stack is built by your Company to meet the…
-_The sentence reads like a real disclosure and carries real-looking figures, which is what
-makes it dangerous. It is not on page 22. Grounding caught it, so it never became a fact —
-it sits in quarantine with the reason attached, browsable under **Quarantined** on the site.
-743 of 5,024 extracted claims were rejected this way, nearly all of them on multi-column
-pages where the text reflows across columns._
+_The sentence reads like a real disclosure and carries real figures, which is what makes it
+dangerous. It is not on page 22. Grounding caught it, so it never became a fact — it sits
+in quarantine with the reason attached, browsable under **Quarantined** on the site. 743
+of 5,024 extracted claims (14.8%) were rejected this way, nearly all of them on
+multi-column pages where the text reflows across columns._
 
 
 ## Limitations and Next Steps
@@ -231,15 +236,22 @@ pages where the text reflows across columns._
   "per cent" with bare numbers below leaves each fact unitless, and the engine then
   refuses to compare it with a figure that does carry a unit. It is why the Economic
   Survey's `6.4 per cent` GDP growth for FY2025 and the RBI's bare `6.5` for the same
-  year never meet: 438 of the 987 cross-document pairs end at `UNIT_UNKNOWN`, and it is
+  year never meet: 438 of the 976 cross-document pairs end at `UNIT_UNKNOWN`, and it is
   the main reason no cross-document contradiction surfaced.
 - **Multi-column pages interleave.** Text extraction reads across columns, so a page like
   a board-of-directors listing produces jumbled sentences. 743 of 5,024 extracted claims
   (15%) failed grounding and were quarantined, nearly all from such pages — visible and
   explained, but lost.
 - **Table rows can be misattributed.** The extractor can carry a value from one row onto
-  the subject of another, which is the likely cause of the DIN contradiction above. The
-  quote is genuine and on the page, so grounding cannot catch it.
+  the subject of another. The quote is genuine and on the page, so grounding cannot catch
+  it — and this is the dominant failure mode by volume: 469 of the 494 contradictions
+  found are between two rows of one table. The selection rule works around it by
+  preferring contradictions that span pages, but the underlying facts are still wrong.
+- **Near-identical metric names once merged wrongly.** "water intensity per rupee of
+  turnover" and "waste intensity per rupee of turnover" are 97% alike, and folding them
+  together reported the two as contradicting each other. Merging now also requires the
+  leading word to match, which costs some real merges (`authorised` against `authorized`)
+  to avoid inventing conflicts. Under-merging is silent; over-merging accuses.
 - **No OCR.** A scanned PDF is refused with a clear message rather than silently
   returning nothing.
 - **Cross-currency facts are never compared.** Without an exchange rate for the right
