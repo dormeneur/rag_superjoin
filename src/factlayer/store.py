@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from . import config
+from .pdf import Page
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS pages (
     doc_id   TEXT NOT NULL REFERENCES documents(id),
     page_no  INTEGER NOT NULL,
     text     TEXT NOT NULL,
+    read     INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (doc_id, page_no)
 );
 
@@ -172,6 +174,12 @@ class Store:
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.executescript(SCHEMA)
+        try:  # databases created before resume existed
+            self.connection.execute(
+                "ALTER TABLE pages ADD COLUMN read INTEGER NOT NULL DEFAULT 0"
+            )
+        except sqlite3.OperationalError:
+            pass
         self.connection.commit()
 
     # ------------------------------------------------------------------ documents
@@ -224,6 +232,27 @@ class Store:
             [(doc_id, page.number, page.text) for page in pages],
         )
         self.connection.commit()
+
+    def pages(self, doc_id: str, *, unread_only: bool = False) -> list[Page]:
+        sql = "SELECT page_no, text FROM pages WHERE doc_id = ?"
+        if unread_only:
+            sql += " AND read = 0"
+        rows = self.connection.execute(sql + " ORDER BY page_no", (doc_id,))
+        return [Page(row["page_no"], row["text"]) for row in rows]
+
+    def mark_pages_read(self, doc_id: str, page_numbers: Iterable[int]) -> None:
+        """A page is read once it has been extracted, or once the filter decided not
+        to. Either way it is settled, so resuming never revisits it."""
+        self.connection.executemany(
+            "UPDATE pages SET read = 1 WHERE doc_id = ? AND page_no = ?",
+            [(doc_id, number) for number in page_numbers],
+        )
+        self.connection.commit()
+
+    def unread_count(self, doc_id: str) -> int:
+        return self.connection.execute(
+            "SELECT COUNT(*) FROM pages WHERE doc_id = ? AND read = 0", (doc_id,)
+        ).fetchone()[0]
 
     def page_text(self, doc_id: str, page_no: int) -> str:
         row = self.connection.execute(

@@ -14,8 +14,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
-from typing import Any
+from collections import deque
+from typing import Any, Callable
 
 from . import config
 
@@ -26,6 +28,65 @@ class LLMUnavailable(RuntimeError):
 
 class LLMOutputError(ValueError):
     """A provider answered, but not with usable JSON."""
+
+
+class RateLimiter:
+    """A sliding-window pacer, one per provider.
+
+    Free tiers publish a requests-per-minute allowance. Discovering it by being
+    refused wastes both the call and the wait, so the client counts its own
+    requests and waits out the window instead. A fixed window would let a burst
+    through at the boundary; this one slides.
+    """
+
+    def __init__(self, per_minute: int, *, clock: Callable[[], float] = time.monotonic):
+        self.per_minute = per_minute
+        self._clock = clock
+        self._sent: deque[float] = deque()
+        self._lock = threading.Lock()
+
+    def delay_for_next(self) -> float:
+        """Seconds to wait before the next request would be inside the allowance."""
+        if self.per_minute <= 0:
+            return 0.0
+        with self._lock:
+            self._forget_old()
+            if len(self._sent) < self.per_minute:
+                return 0.0
+            return max(0.0, 60.0 - (self._clock() - self._sent[0]))
+
+    def record(self) -> None:
+        with self._lock:
+            self._sent.append(self._clock())
+
+    def used(self) -> int:
+        with self._lock:
+            self._forget_old()
+            return len(self._sent)
+
+    def acquire(self) -> None:
+        """Block until a request may be sent, then count it."""
+        while (delay := self.delay_for_next()) > 0:
+            time.sleep(min(delay, 5.0))
+        self.record()
+
+    def _forget_old(self) -> None:
+        cutoff = self._clock() - 60.0
+        while self._sent and self._sent[0] <= cutoff:
+            self._sent.popleft()
+
+
+_limiters: dict[str, RateLimiter] = {}
+_limiters_lock = threading.Lock()
+
+
+def limiter_for(provider: str) -> RateLimiter:
+    with _limiters_lock:
+        rate = config.requests_per_minute()
+        limiter = _limiters.get(provider)
+        if limiter is None or limiter.per_minute != rate:
+            limiter = _limiters[provider] = RateLimiter(rate)
+        return limiter
 
 
 def complete_json(system: str, user: str, *, max_tokens: int = 4096) -> Any:
@@ -77,7 +138,9 @@ def _call(name: str, system: str, user: str, max_tokens: int) -> str:
     client = OpenAI(api_key=api_key, base_url=provider.base_url, timeout=90.0)
     model = os.getenv(provider.model_env) or provider.default_model
 
+    limiter = limiter_for(name)
     for attempt in range(2):
+        limiter.acquire()
         try:
             response = client.chat.completions.create(
                 model=model,

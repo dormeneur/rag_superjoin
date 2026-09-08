@@ -71,6 +71,12 @@ def percent_tolerance() -> float:
     return float(os.getenv("FACTLAYER_PERCENT_TOLERANCE", "0.05"))
 
 
+def requests_per_minute() -> int:
+    """Requests per minute per provider. Set below the free tier's published limit;
+    0 turns pacing off."""
+    return int(os.getenv("FACTLAYER_RPM", "25"))
+
+
 def max_pages_per_document() -> int:
     """0 means no cap. Useful when a free tier is close to its daily limit."""
     return int(os.getenv("FACTLAYER_MAX_PAGES", "0"))

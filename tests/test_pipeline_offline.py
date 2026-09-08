@@ -224,3 +224,73 @@ def test_no_provider_available_leaves_the_document_partial(monkeypatch, pdf_byte
     result = ingest(pdf_bytes([REVENUE_PAGE]), "doc.pdf")
     assert result.status == "partial"
     assert Store().documents()[0]["status"] == "partial"
+
+
+# ------------------------------------------------------------------- resuming
+
+def test_a_partial_document_is_resumed_on_re_upload(fake_llm, pdf_bytes, monkeypatch):
+    """A free tier that ran out mid-document must not cost the whole document. The
+    pages already read stay read, and a re-upload picks up the rest."""
+    data = pdf_bytes([REVENUE_PAGE])
+
+    monkeypatch.setenv("LLM_PROVIDER_ORDER", "")
+    first = ingest(data, "annual-report.pdf")
+    assert first.status == "partial"
+    assert first.claims_extracted == 0
+
+    fake_llm({"8,142 crore": revenue_claim()})
+    second = ingest(data, "annual-report.pdf")
+
+    assert second.document_id == first.document_id
+    assert second.status == "complete"
+    assert second.claims_extracted == 1
+    assert len(Store().documents()) == 1
+
+
+def test_resuming_reads_only_the_pages_that_were_missed(fake_llm, pdf_bytes, monkeypatch):
+    """Ingestion can be capped to stay inside a daily quota; running it again
+    continues rather than starting over."""
+    fake_llm(
+        {
+            "8,142": revenue_claim(),
+            "6.5 per cent": [
+                {
+                    "kind": "measurement",
+                    "entity": "India",
+                    "entity_canonical": "india",
+                    "metric": "Real GDP growth",
+                    "metric_canonical": "real_gdp_growth",
+                    "value": "6.5 per cent",
+                    "period": "FY24",
+                    "scope": {},
+                    "quote": GROWTH_PAGE,
+                    "confidence": 0.9,
+                }
+            ],
+        }
+    )
+    monkeypatch.setenv("FACTLAYER_MAX_PAGES", "1")
+    data = pdf_bytes([REVENUE_PAGE, GROWTH_PAGE])
+
+    first = ingest(data, "report.pdf")
+    assert first.status == "partial"
+    assert first.claims_extracted == 1
+
+    second = ingest(data, "report.pdf")
+    assert second.status == "complete"
+    assert len(Store().claims(status="active")) == 2
+
+
+def test_a_completed_document_is_never_reprocessed(fake_llm, pdf_bytes):
+    fake_llm({"8,142 crore": revenue_claim()})
+    data = pdf_bytes([REVENUE_PAGE])
+    ingest(data, "a.pdf")
+    assert ingest(data, "a.pdf").status == "duplicate"
+
+
+def test_pages_with_nothing_to_extract_are_not_retried_forever(fake_llm, pdf_bytes):
+    """A page the filter skipped is a decision, not an outage: it must not leave the
+    document permanently 'partial'."""
+    fake_llm({"8,142 crore": revenue_claim()})
+    result = ingest(pdf_bytes([REVENUE_PAGE, "Contents", "  "]), "a.pdf")
+    assert result.status == "complete"

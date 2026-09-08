@@ -39,11 +39,20 @@ class IngestResult:
 
 
 def ingest(data: bytes, filename: str, *, store: Store | None = None) -> IngestResult:
+    """Add a PDF to the knowledge layer, or carry on with one that stalled.
+
+    A document that was left partial — because a free tier ran out, a provider was
+    down, or a page cap was set — is resumed from the pages it never read. A
+    document that finished is not read again.
+    """
     store = store or Store()
 
     digest = hashlib.sha256(data).hexdigest()
     if existing := store.document_by_hash(digest):
-        return _already_have_it(store, existing)
+        if existing["status"] != "partial":
+            return _already_have_it(store, existing)
+        return _read_pending_pages(store, existing["id"], existing["filename"],
+                                   existing["page_count"], resumed=True)
 
     try:
         pages = read_pages(data)
@@ -51,7 +60,6 @@ def ingest(data: bytes, filename: str, *, store: Store | None = None) -> IngestR
         raise IngestError(str(exc)) from exc
 
     metadata = extract.document_metadata(pages)
-    doc_date = metadata.get("doc_date")
     doc_id = store.add_document(
         filename=filename,
         sha256=digest,
@@ -59,30 +67,49 @@ def ingest(data: bytes, filename: str, *, store: Store | None = None) -> IngestR
         status="processing",
         title=metadata.get("title"),
         publisher=metadata.get("publisher"),
-        doc_date=doc_date,
+        doc_date=metadata.get("doc_date"),
         stored_path=_keep_a_copy(data, digest, filename),
     )
     store.add_pages(doc_id, pages)
+    return _read_pending_pages(store, doc_id, filename, len(pages), resumed=False)
 
-    claims, failures = _extract_all(store, pages, doc_id, doc_date)
-    claims = _consolidate(claims, store.vocabulary())
-    stored = store.add_claims(claims)
 
+def _read_pending_pages(
+    store: Store, doc_id: str, filename: str, page_count: int, *, resumed: bool
+) -> IngestResult:
+    doc_date = _document_date(store, doc_id)
+    pending = store.pages(doc_id, unread_only=True)
+
+    # A page the filter passed over is settled, not pending: mark it read so a later
+    # run does not keep reconsidering it.
+    store.mark_pages_read(doc_id, [p.number for p in pending if not looks_factual(p.text)])
+    worth_reading = [page for page in pending if looks_factual(page.text)]
+
+    cap = config.max_pages_per_document()
+    if cap:
+        worth_reading = worth_reading[:cap]
+
+    claims, read_pages_numbers = _extract_all(store, worth_reading, doc_id, doc_date)
+    store.mark_pages_read(doc_id, read_pages_numbers)
+
+    stored = store.add_claims(_consolidate(claims, store.vocabulary()))
     active = [claim for claim in stored if claim.status == "active"]
     relations = _relate(store, active)
 
-    status = "partial" if failures else "complete"
+    remaining = store.unread_count(doc_id)
+    status = "complete" if remaining == 0 else "partial"
     store.set_document_status(doc_id, status)
+
     return IngestResult(
         document_id=doc_id,
         filename=filename,
-        page_count=len(pages),
+        page_count=page_count,
         status=status,
         claims_extracted=len(active),
         claims_quarantined=len(stored) - len(active),
         relations_created=relations,
-        pages_read=len(pages),
-        note=_note(failures),
+        pages_read=len(read_pages_numbers),
+        note=_note(remaining, resumed),
     )
 
 
@@ -101,22 +128,37 @@ def _already_have_it(store: Store, existing: dict) -> IngestResult:
     )
 
 
+def _document_date(store: Store, doc_id: str) -> date | None:
+    """Publication date decides whether a later document supersedes an earlier one,
+    so a resume retries it when the first attempt could not reach a provider."""
+    document = store.document(doc_id) or {}
+    if document.get("doc_date"):
+        return date.fromisoformat(document["doc_date"])
+
+    metadata = extract.document_metadata(store.pages(doc_id)[:3])
+    if metadata.get("doc_date"):
+        store.connection.execute(
+            "UPDATE documents SET doc_date = ?, title = COALESCE(title, ?),"
+            " publisher = COALESCE(publisher, ?) WHERE id = ?",
+            (metadata["doc_date"].isoformat(), metadata.get("title"),
+             metadata.get("publisher"), doc_id),
+        )
+        store.connection.commit()
+    return metadata.get("doc_date")
+
+
 # ------------------------------------------------------------------- extraction
 
 
 def _extract_all(
     store: Store, pages: list[Page], doc_id: str, doc_date: date | None
-) -> tuple[list[Claim], int]:
-    """Only pages that state something are sent to a model, and they go in parallel.
-    One page failing costs that page, not the document."""
-    vocabulary = store.vocabulary()
-    worth_reading = [page for page in pages if looks_factual(page.text)]
-    cap = config.max_pages_per_document()
-    if cap:
-        worth_reading = worth_reading[:cap]
+) -> tuple[list[Claim], list[int]]:
+    """Read pages in parallel and report which ones succeeded. A page that fails
+    stays unread, so the next run retries it instead of losing it."""
+    if not pages:
+        return [], []
 
-    if not worth_reading:
-        return [], 0
+    vocabulary = store.vocabulary()
 
     def read(page: Page):
         return extract.claims_from_page(
@@ -124,15 +166,15 @@ def _extract_all(
         )
 
     claims: list[Claim] = []
-    failures = 0
-    workers = max(1, min(config.extraction_workers(), len(worth_reading)))
+    done: list[int] = []
+    workers = max(1, min(config.extraction_workers(), len(pages)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        for result in pool.map(_safely(read), worth_reading):
+        for page, result in zip(pages, pool.map(_safely(read), pages)):
             if result is None:
-                failures += 1
-            else:
-                claims.extend(result)
-    return claims, failures
+                continue  # this page is lost for now, the document is not
+            claims.extend(result)
+            done.append(page.number)
+    return claims, done
 
 
 def _safely(function):
@@ -256,10 +298,12 @@ def _keep_a_copy(data: bytes, digest: str, filename: str) -> str:
     return str(path)
 
 
-def _note(failures: int) -> str | None:
-    if not failures:
-        return None
+def _note(remaining: int, resumed: bool) -> str | None:
+    prefix = "Resumed. " if resumed else ""
+    if not remaining:
+        return f"{prefix}Every page has been read." if resumed else None
     return (
-        f"{failures} page(s) could not be read by any configured model provider. "
-        "Facts on those pages are missing; re-uploading later will fill them in."
+        f"{prefix}{remaining} page(s) are still unread — a provider was unavailable, "
+        "or a page cap is set. Upload the same file again to carry on from here; "
+        "nothing already read will be repeated."
     )
