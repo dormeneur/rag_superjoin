@@ -1,8 +1,9 @@
 """Entry point for a Hugging Face Space running the Gradio SDK.
 
 Docker Spaces are a paid feature, and Gradio Spaces are not, so this serves the
-same FastAPI application the Dockerfile does. Gradio is mounted on a side path
-only to satisfy the SDK; the site itself is the FastAPI app at "/".
+same FastAPI application the Dockerfile does. The SDK only decides which image is
+built and which file is run; nothing here has to be a Gradio app, and this is not
+one. Exactly one server binds the port, which is the whole point.
 """
 
 from __future__ import annotations
@@ -44,20 +45,10 @@ os.environ.setdefault("FACTLAYER_UPLOADS", "/tmp/uploads")
 
 from factlayer.api import app  # noqa: E402  (import after the corpus is in place)
 
-try:
-    import gradio as gr
-
-    with gr.Blocks() as _sdk_probe:
-        gr.Markdown("The Fact Knowledge Layer is served at [/](/).")
-
-    app = gr.mount_gradio_app(app, _sdk_probe, path="/gradio")
-except Exception:
-    # Gradio only exists to keep the Space SDK happy. Without it the FastAPI app
-    # still serves everything, which is what matters.
-    pass
-
-
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "7860")))
+    # The host names the port it expects to reach; take it from the environment
+    # rather than assuming, and fall back to the Spaces default.
+    port = os.getenv("GRADIO_SERVER_PORT") or os.getenv("PORT") or "7860"
+    uvicorn.run(app, host="0.0.0.0", port=int(port))
