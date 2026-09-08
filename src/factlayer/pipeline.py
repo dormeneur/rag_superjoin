@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import date
@@ -236,8 +237,12 @@ def _safely(function):
     def wrapper(page):
         try:
             return function(page)
-        except (llm.LLMUnavailable, llm.LLMOutputError, ValueError):
-            return None  # this page is lost, the document is not
+        except (llm.LLMUnavailable, llm.LLMOutputError, ValueError) as exc:
+            # The page is lost, not the document — but silently is not the same as
+            # gone: an operator watching server logs needs the reason, since the
+            # note the caller gets back only ever says "a provider was unavailable".
+            print(f"[extract] page {page.number} lost: {exc}", file=sys.stderr)
+            return None
 
     return wrapper
 
