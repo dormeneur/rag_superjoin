@@ -216,3 +216,18 @@ def test_the_failure_highlight_includes_its_page_for_context(client, fake_llm, p
     failure = client.get("/api/highlights").json()["failure"]
     assert failure["quarantine_reason"]
     assert failure["page_text"]
+
+
+def test_upload_is_refused_clearly_when_no_provider_is_configured(client, monkeypatch, pdf_bytes):
+    """A public deployment may ship the corpus without a key attached. Uploading
+    should say so, not quietly store a document holding no facts."""
+    monkeypatch.setenv("LLM_PROVIDER_ORDER", "")
+    response = upload(client, pdf_bytes([PAGE]))
+    assert response.status_code == 503
+    assert "provider" in response.json()["detail"].lower()
+
+
+def test_health_reports_whether_uploads_are_possible(client):
+    body = client.get("/health").json()
+    assert "providers_ready" in body
+    assert "uploads_enabled" in body
