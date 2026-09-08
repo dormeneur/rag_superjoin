@@ -198,3 +198,68 @@ def _compare_attributes(a, b, diff) -> Verdict:
         return Verdict(RECONCILABLE, "TEMPORAL_SUCCESSION_INFERRED", diff)
 
     return Verdict(CONTRADICTS, "ATTRIBUTE_VALUE_CONFLICT", diff)
+
+
+# ------------------------------------------------------------------ explanations
+
+
+def describe(a: Claim, b: Claim, verdict: Verdict) -> str:
+    """A plain-English reason built from the rules alone.
+
+    Always available, even with every provider rate-limited, so a relation is never
+    shown without a reason. A model may rewrite this later; it may not change it.
+    """
+    subject = f"{a.entity} · {a.metric}"
+    left, right = _render(a), _render(b)
+    reason = verdict.reason_code
+
+    if reason == "VALUE_AGREEMENT":
+        return (f"Both documents report {subject} for {a.period_label or 'the same period'} "
+                f"as {left} and {right}. Once magnitudes and units are normalised these "
+                f"are the same figure.")
+    if reason == "VALUE_CONFLICT":
+        return (f"{subject} for {a.period_label or 'the same period'} is reported as "
+                f"{left} in one document and {right} in the other. Entity, metric, period, "
+                f"unit and stated scope all match, so nothing explains the difference.")
+    if reason == "PERIOD_MISMATCH":
+        return (f"These cover different periods — {a.period_label} versus {b.period_label} — "
+                f"so {left} and {right} are not expected to match.")
+    if reason == "SCOPE_MISMATCH":
+        pairs = "; ".join(
+            f"{key}: {values[0]} versus {values[1]}"
+            for key, values in verdict.dimension_diff["scope"]["conflicts"].items()
+        )
+        return (f"The documents qualify this differently ({pairs}), so {left} and {right} "
+                f"are measuring different things rather than disagreeing.")
+    if reason == "CURRENCY_MISMATCH":
+        return (f"Reported in different currencies ({a.unit} and {b.unit}). Comparing "
+                f"{left} with {right} needs an exchange rate for the period, which the "
+                f"documents do not give.")
+    if reason == "UNIT_UNKNOWN":
+        return (f"One of these figures has no stated unit ({left} versus {right}), so they "
+                f"cannot safely be compared.")
+    if reason == "ATTRIBUTE_AGREEMENT":
+        return f"Both documents state {a.entity}'s {a.metric} as {a.value_text}."
+    if reason == "TEMPORAL_SUCCESSION":
+        return (f"{a.entity}'s {a.metric} is stated as '{a.value_text}' for {a.period_label} "
+                f"and '{b.value_text}' for {b.period_label}. The value changed over time.")
+    if reason == "TEMPORAL_SUCCESSION_INFERRED":
+        older, newer = (a, b) if (a.doc_date and b.doc_date and a.doc_date < b.doc_date) else (b, a)
+        return (f"{a.entity}'s {a.metric} is '{older.value_text}' in the older document "
+                f"({older.doc_date}) and '{newer.value_text}' in the newer one "
+                f"({newer.doc_date}). Read as a change over time rather than a "
+                f"disagreement — neither document states validity dates, so this is "
+                f"inferred from publication dates.")
+    if reason == "ATTRIBUTE_VALUE_CONFLICT":
+        return (f"{a.entity}'s {a.metric} is given as '{a.value_text}' and '{b.value_text}' "
+                f"for the same time, and both cannot hold.")
+    return f"{subject}: {reason.lower().replace('_', ' ')}."
+
+
+def _render(claim: Claim) -> str:
+    if claim.value_num is None:
+        return f"'{claim.value_text}'"
+    written = f"{claim.value_text}" if claim.value_text else ""
+    unit = "" if claim.unit == "percent" else f" {claim.unit or ''}".rstrip()
+    figure = f"{claim.value_num:,.4g}{unit}" if claim.unit != "percent" else f"{claim.value_num:g}%"
+    return f"{written} ({figure})" if written else figure

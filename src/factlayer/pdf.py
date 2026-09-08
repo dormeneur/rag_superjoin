@@ -45,23 +45,42 @@ def read_pages(data: bytes) -> list[Page]:
     return pages
 
 
-# A page earns a model call if it states something. Numbers are the strongest signal;
-# the words cover semantic facts that carry no digits, such as who holds which role.
-_DIGIT = re.compile(r"\d")
-_SEMANTIC_SIGNALS = re.compile(
-    r"\b(?:chair(?:man|person)?|director|officer|ceo|cfo|coo|cto|president|secretary"
-    r"|auditor|appointed|resigned|retired|effective|incorporated|registered\s+office"
-    r"|headquarter\w*|subsidiar\w+|acquired|merger)\b",
+# A page earns a model call if it states something. Measured on the starter set,
+# this keeps about 90% of pages: annual reports and statistical bulletins really are
+# that dense. It earns its keep on covers, contents pages and narrative sections.
+_QUANTITY = re.compile(
+    r"(?:[₹$€£]\s*\d)"
+    r"|(?:\d[\d,.\s]*\s*(?:%|per\s?cent\w*|bps|basis\s+points|crore|crores|lakh|lakhs"
+    r"|million|mn|billion|bn|trillion|tn|thousand)\b)"
+    r"|(?:\b(?:rs|inr|usd|eur|gbp)\b\.?\s*\d)",
     re.I,
 )
+# Tables state their units in the header rather than beside every number, so a page
+# dense with bare numbers is a table and worth reading.
+_NUMBER_TOKEN = re.compile(r"(?<![A-Za-z])-?\d+(?:[.,]\d+)*")
+_TABLE_DENSITY = 12
+
+# Facts that carry no digits at all: who holds which role, where a company sits.
+_SEMANTIC_SIGNALS = re.compile(
+    r"\b(?:chair(?:man|person)?|director|officer|ceo|cfo|coo|cto|president|secretary"
+    r"|auditor|appointed|resigned|retired|effective\s+from|incorporated"
+    r"|registered\s+office|headquarter\w*|subsidiar\w+|acquired|merger)\b",
+    re.I,
+)
+
+MIN_PAGE_CHARS = 40
 
 
 def looks_factual(text: str) -> bool:
     """Skip covers, blank pages and pure narrative before paying for a model call."""
     stripped = text.strip()
-    if len(stripped) < 120:
+    if len(stripped) < MIN_PAGE_CHARS:
         return False
-    return bool(_DIGIT.search(stripped) or _SEMANTIC_SIGNALS.search(stripped))
+    return bool(
+        _QUANTITY.search(stripped)
+        or _SEMANTIC_SIGNALS.search(stripped)
+        or len(_NUMBER_TOKEN.findall(stripped)) >= _TABLE_DENSITY
+    )
 
 
 def find_quote(page_text: str, quote: str) -> tuple[int, int] | None:
