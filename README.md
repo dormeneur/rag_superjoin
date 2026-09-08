@@ -63,15 +63,27 @@ The whole thing is one container: API, interface, and a knowledge layer already 
 from the starter documents, so a deployment opens with something to look at rather than
 an empty database.
 
+The built corpus is committed at `deploy/factlayer.db.gz` (2.4 MB), so publishing needs
+one command and no rebuild:
+
 ```bash
-python -m factlayer ingest data/*/*.pdf          # build the corpus
-gzip -9 -c factlayer.db > deploy/factlayer.db.gz # 11 MB becomes 1.7 MB
-deploy/publish.sh <hf-username> <space-name>     # push to a Hugging Face Space
+HF_TOKEN=hf_xxx deploy/publish.sh          # creates the Space and pushes to it
 ```
 
+The username is read from the token. Rebuild the corpus first only if you want to:
+
+```bash
+python -m factlayer ingest data/*/*.pdf
+gzip -9 -c factlayer.db > deploy/factlayer.db.gz
+```
+
+Or run the **Deploy to Hugging Face Space** workflow from the Actions tab, having added
+`HF_TOKEN` as a repository secret — no local clone needed.
+
 It runs anywhere that takes a Dockerfile. Hugging Face Spaces is the default because it
-is free, needs no card, and keeps a permanent URL. To enable uploads on the deployment,
-add `GEMINI_API_KEY` under the Space's *Variables and secrets*.
+is free, needs no card, and keeps a permanent URL. Browsing the corpus needs no
+credentials; to enable uploads on the deployment, add `GEMINI_API_KEY` under the Space's
+*Variables and secrets*.
 
 ### API
 

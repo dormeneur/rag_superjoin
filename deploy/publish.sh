@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Publish this project to a Hugging Face Space.
 #
-#   deploy/publish.sh <hf-username> <space-name>
+#   HF_TOKEN=hf_xxx deploy/publish.sh              # username read from the token
+#   deploy/publish.sh <hf-username> <space-name>   # or name them yourself
 #
 # Needs a Hugging Face account and a write token (https://huggingface.co/settings/tokens).
 # The token is read from HF_TOKEN, or git will prompt for it as the password.
@@ -12,9 +13,26 @@
 # Browsing the prepared corpus works without one.
 set -euo pipefail
 
-user="${1:?usage: deploy/publish.sh <hf-username> <space-name>}"
-space="${2:?usage: deploy/publish.sh <hf-username> <space-name>}"
+space="${2:-factlayer}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
+
+# The username is whoever the token belongs to, so it does not have to be typed
+# and cannot be typed wrong.
+user="${1:-}"
+if [ -z "$user" ]; then
+  if [ -z "${HF_TOKEN:-}" ]; then
+    echo "Set HF_TOKEN, or pass the username: deploy/publish.sh <hf-username> [space]" >&2
+    exit 1
+  fi
+  user=$(curl -sS -H "Authorization: Bearer $HF_TOKEN" \
+           https://huggingface.co/api/whoami-v2 |
+         python3 -c "import json,sys; print(json.load(sys.stdin)['name'])" 2>/dev/null || true)
+  if [ -z "$user" ]; then
+    echo "Could not read the account for that token. Is it a Write token?" >&2
+    exit 1
+  fi
+  echo "Deploying as $user"
+fi
 
 if [ ! -f "$root/deploy/factlayer.db.gz" ]; then
   echo "deploy/factlayer.db.gz is missing. Build it with:" >&2
@@ -37,11 +55,18 @@ rm -rf "$staging/data" "$staging/docs" "$staging/tests"
 cp "$root/deploy/factlayer.db.gz" "$staging/deploy/factlayer.db.gz"
 mv "$staging/deploy/README-space.md" "$staging/README.md"
 
+# Create the Space if it is not there yet. Harmless when it already exists.
+if [ -n "${HF_TOKEN:-}" ]; then
+  echo "Creating the Space (skipped if it already exists)..."
+  curl -sS -X POST https://huggingface.co/api/repos/create \
+    -H "Authorization: Bearer $HF_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"type\":\"space\",\"name\":\"$space\",\"sdk\":\"docker\",\"private\":false}" \
+    -o /dev/null -w "  create: HTTP %{http_code}\n" || true
+fi
+
 cd "$staging"
 git init -q
-git lfs install --local >/dev/null 2>&1 || true
-git lfs track "deploy/*.gz" >/dev/null 2>&1 || true
-[ -f .gitattributes ] && git add .gitattributes
 git add -A
 git -c user.email=deploy@localhost -c user.name=deploy commit -qm "Deploy fact knowledge layer"
 
@@ -49,6 +74,7 @@ remote="https://huggingface.co/spaces/$user/$space"
 if [ -n "${HF_TOKEN:-}" ]; then
   remote="https://$user:$HF_TOKEN@huggingface.co/spaces/$user/$space"
 fi
+echo "Pushing to $user/$space ..."
 git push --force "$remote" HEAD:main
 
 echo

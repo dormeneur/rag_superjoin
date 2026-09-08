@@ -1,0 +1,32 @@
+# Publishes the project to a Hugging Face Space.
+#
+# One-time setup: add a Hugging Face write token as a repository secret named
+# HF_TOKEN (Settings -> Secrets and variables -> Actions -> New repository secret).
+# Then run this workflow from the Actions tab.
+#
+# Runs here rather than locally because GitHub's runners can reach huggingface.co.
+name: Deploy to Hugging Face Space
+
+on:
+  workflow_dispatch:
+    inputs:
+      space:
+        description: Space name to publish to
+        required: false
+        default: factlayer
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::HF_TOKEN secret is not set. Add it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          bash deploy/publish.sh "" "${{ inputs.space }}"
