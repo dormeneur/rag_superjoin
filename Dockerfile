@@ -15,6 +15,13 @@ RUN pip install --no-cache-dir --disable-pip-version-check .
 COPY --chown=app:app deploy/factlayer.db.gz ./
 RUN gunzip factlayer.db.gz && chown app:app factlayer.db
 
+# WORKDIR ran as root, so /app itself is root-owned even though every file placed in
+# it was individually chowned. SQLite needs to create a same-directory -journal file
+# on every write, and a non-owner cannot create files in a directory it does not own
+# — that surfaces as "attempt to write a readonly database" on the first upload, not
+# at build time, because nothing writes to the corpus until then.
+RUN chown app:app /app
+
 USER app
 ENV FACTLAYER_DB=/app/factlayer.db \
     FACTLAYER_UPLOADS=/tmp/uploads \
