@@ -61,7 +61,7 @@ _To be added._
 
 ## Approach
 
-**Pipeline.** `pdf → filter → extract → ground → store → reconcile`, one module per
+**Pipeline.** `pdf → extract → ground → store → reconcile`, one module per
 stage in `src/factlayer/`. Full design notes in [docs/DESIGN.md](docs/DESIGN.md).
 
 **Two fact shapes.** A *measurement* (entity, metric, value, unit, period, scope) and an
