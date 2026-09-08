@@ -305,6 +305,20 @@ def readable_name(name: str) -> str:
     return " ".join(out)
 
 
+def readable_metric(label: str) -> str:
+    """A metric as it should read inside a sentence.
+
+    Explanations say "Kapil Bharati's DIN is given as", so the label wants lower case
+    — except where lowering it destroys an acronym.
+    """
+    text = readable(label)
+    if not text:
+        return text
+    if text.isupper() or text.lower() in _ACRONYMS:
+        return text.upper()
+    return text[0].lower() + text[1:]
+
+
 def normalize_value_text(value: str) -> str:
     """Loose comparison for written values, so 'Director & CEO' matches 'Director and
     CEO' without treating a genuinely different role as the same."""

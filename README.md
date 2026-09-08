@@ -140,20 +140,106 @@ modules and a command line, with no framework beyond FastAPI and no vector datab
 
 ## The Four Cases
 
-_To be filled in from real output once the full dataset has been processed._
+All four are taken verbatim from the live system, and all four are chosen by rule rather
+than by hand — the front page recomputes them against whatever documents are loaded. The
+corpus below is the six starter PDFs: 511 pages, 4,281 facts, 11,569 relationships.
 
-1. **Corroborated across documents** — _pending_
-2. **Genuine contradiction** — _pending_
-3. **Apparent contradiction explained by context** — _pending_
-4. **An extraction failure and how it is handled** — _pending_
+### 1. A fact corroborated across documents
+
+**CORROBORATES** · `ATTRIBUTE_AGREEMENT` · decided by rules
+
+Both documents state Sahil Barua's DIN as 05131571.
+
+- **05131571** — Sahil Barua · DIN  
+  <sub>`01-delhivery-prospectus-2022-excerpt.pdf` p.30</sub>
+  > Sahil Barua 05131571 House No. 367/4, B5 Plot No., Villa No. 9,
+
+- **05131571** — Sahil Barua · DIN  
+  <sub>`02-delhivery-annual-report-fy24-excerpt.pdf` p.28</sub>
+  > DIN: 05131571
+
+_Two filings two years apart, one written as a line in an address table and the other as a
+labelled field. Same fact, different shapes._
+
+### 2. A genuine contradiction
+
+**CONTRADICTS** · `ATTRIBUTE_VALUE_CONFLICT` · decided by rules
+
+Kapil Bharati's DIN is given as '02227607' and '01432123' for the same time, and both cannot hold.
+
+- **02227607** — Kapil Bharati · DIN  
+  <sub>`01-delhivery-prospectus-2022-excerpt.pdf` p.30</sub>
+  > Kapil Bharati 02227607 295 DDA Flats, Gulmohar Enclave, Andrewsganj
+
+- **01432123** — Kapil Bharati · DIN  
+  <sub>`01-delhivery-prospectus-2022-excerpt.pdf` p.85</sub>
+  > DIN: 01432123
+
+_Both pages are in the same prospectus, and they cannot both be right. Reading page 85
+suggests the second DIN belongs to a different director, so the likeliest cause is the
+extractor losing its place in a table — which is exactly the kind of thing worth being
+told about. The system has no idea what a DIN is; it flagged this because two claims
+about one subject disagreed._
+
+_Across the six documents the engine reports **no** cross-document contradiction. That
+is a real result, not a gap in the demo: the largest blocker is `UNIT_UNKNOWN`, below._
+
+### 3. An apparent contradiction, explained by context
+
+**RECONCILABLE** · `SCOPE_MISMATCH` · decided by rules
+
+The documents qualify this differently (unit: ₹ in Million versus ₹ Cr), so 757.86 (757.9) and 76 (76) are not directly comparable and this is not a disagreement.
+
+- **757.86** — Delhivery Limited · Adjusted EBITDA  
+  <sub>`02-delhivery-annual-report-fy24-excerpt.pdf` p.37 · FY2024 · unit: ₹ in Million</sub>
+  > Adjusted EBITDA 757.86 (4,038.66)
+
+- **76** — Delhivery · Adjusted EBITDA  
+  <sub>`03-delhivery-q4-fy24-earnings-presentation.pdf` p.15 · FY2024 · unit: ₹ Cr</sub>
+  > Adjusted EBITDA (217) (125) (67) 6 (25) (13) 92 21 (404) 76
+
+_This is the engine doing its job. The two documents report the same measure for the same
+year, one in millions and one in crore, and the engine refused to call that a
+disagreement. It is also honest about its limit: 757.86 million and 76 crore are the same
+amount, and a sharper version would have converted the units and called it corroboration
+rather than stopping at "these are qualified differently"._
+
+### 4. An extraction failure, and how it is handled
+
+**Quarantined** — The quoted sentence is not on the page it cites.
+
+The model reported `Delhivery Limited · Revenue from operations = 66,586.61` in `02-delhivery-annual-report-fy24-excerpt.pdf` p.22, quoting:
+
+> y The revenue from operations on standalone basis for FY24 stood at ₹ 74,540.82 million as against ₹66,586.61 million for FY23, registering a growth of 11.95%.
+
+
+That sentence is not on the page. What the page actually holds:
+
+> Corporate Overview Statutory Reports Financial Statements Directors’ Report Dear Members, y Proprietary logistics operating system: In-house logistics of your Company function as managed marketplaces that Delhivery Limited (“Company”/“Delhivery”) technology stack is built by your Company to meet the…
+_The sentence reads like a real disclosure and carries real-looking figures, which is what
+makes it dangerous. It is not on page 22. Grounding caught it, so it never became a fact —
+it sits in quarantine with the reason attached, browsable under **Quarantined** on the site.
+743 of 5,024 extracted claims were rejected this way, nearly all of them on multi-column
+pages where the text reflows across columns._
+
 
 ## Limitations and Next Steps
 
 **Does not work yet**
 
-- **Multi-column pages interleave.** Text extraction reads across columns, so a page
-  like a board-of-directors listing produces jumbled sentences. Claims from such pages
-  usually fail grounding and land in quarantine — visible, but lost.
+- **Units declared in a table header are lost.** This is the biggest one. A column headed
+  "per cent" with bare numbers below leaves each fact unitless, and the engine then
+  refuses to compare it with a figure that does carry a unit. It is why the Economic
+  Survey's `6.4 per cent` GDP growth for FY2025 and the RBI's bare `6.5` for the same
+  year never meet: 438 of the 987 cross-document pairs end at `UNIT_UNKNOWN`, and it is
+  the main reason no cross-document contradiction surfaced.
+- **Multi-column pages interleave.** Text extraction reads across columns, so a page like
+  a board-of-directors listing produces jumbled sentences. 743 of 5,024 extracted claims
+  (15%) failed grounding and were quarantined, nearly all from such pages — visible and
+  explained, but lost.
+- **Table rows can be misattributed.** The extractor can carry a value from one row onto
+  the subject of another, which is the likely cause of the DIN contradiction above. The
+  quote is genuine and on the page, so grounding cannot catch it.
 - **No OCR.** A scanned PDF is refused with a clear message rather than silently
   returning nothing.
 - **Cross-currency facts are never compared.** Without an exchange rate for the right
@@ -165,6 +251,8 @@ _To be filled in from real output once the full dataset has been processed._
 
 **Next**
 
+- Read units from table headers and attach them to every cell beneath, which would
+  unblock the largest class of cross-document comparisons.
 - Column-aware text extraction, which would fix the largest single source of
   quarantined claims.
 - A labelled gold set and precision/recall numbers, so claims about accuracy are

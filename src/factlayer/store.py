@@ -445,13 +445,14 @@ class Store:
     def _best_failure(self) -> dict[str, Any] | None:
         """Case four is an extraction failure the system caught, so it comes from
         the claims grounding rejected. Without a stated reason there is nothing to
-        show, so those are skipped."""
+        show, so those are skipped, and a quote of roughly a sentence is preferred:
+        a fragment demonstrates nothing and half a page of table text is unreadable."""
         row = self.connection.execute(
             """
             SELECT * FROM claims
             WHERE status = 'quarantined'
               AND quarantine_reason IS NOT NULL AND quarantine_reason != ''
-            ORDER BY LENGTH(quote) DESC, id ASC
+            ORDER BY ABS(LENGTH(quote) - 160) ASC, id ASC
             LIMIT 1
             """
         ).fetchone()

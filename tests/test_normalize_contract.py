@@ -181,3 +181,23 @@ def test_an_entity_key_is_presented_as_a_name(raw, expected):
 @pytest.mark.parametrize("raw", ["Delhivery Limited", "Reserve Bank of India", "IMF", ""])
 def test_a_name_the_document_wrote_is_left_alone(raw):
     assert readable_name(raw) == raw
+
+
+from factlayer.normalize import readable_metric
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("din", "DIN"),
+        ("DIN", "DIN"),
+        ("revenue_from_operations", "revenue from operations"),
+        ("Revenue from operations", "revenue from operations"),
+        ("share_price_low", "share price low"),
+        ("EBITDA", "EBITDA"),
+    ],
+)
+def test_a_metric_reads_naturally_inside_a_sentence(raw, expected):
+    """Explanations put the metric mid-sentence — "Kapil Bharati's DIN is given as" —
+    so it wants lower case, except where lowering it destroys an acronym."""
+    assert readable_metric(raw) == expected

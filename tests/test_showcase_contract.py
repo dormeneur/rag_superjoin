@@ -231,3 +231,20 @@ def test_crossing_documents_still_outranks_crossing_pages():
 
     picked = store.showcase()["contradiction"]
     assert {picked["claim_a"], picked["claim_b"]} == {cross_a.id, cross_b.id}
+
+
+def test_the_failure_shown_has_a_quote_someone_will_read():
+    """The card exists to make the catch legible. A three-word fragment shows
+    nothing, and half a page of run-together table text shows too much."""
+    store = seeded()
+    a_id, _ = doc_ids(store)
+    stored(
+        store,
+        make_claim(doc_id=a_id, page_no=1, quote="Too short.", status="quarantined",
+                   quarantine_reason="not on the page"),
+        make_claim(doc_id=a_id, page_no=2, quote="x" * 1400, status="quarantined",
+                   quarantine_reason="not on the page"),
+        make_claim(doc_id=a_id, page_no=3, quote="y" * 160, status="quarantined",
+                   quarantine_reason="not on the page"),
+    )
+    assert store.showcase()["failure"]["page_no"] == 3
