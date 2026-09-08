@@ -1,3 +1,10 @@
-# Hugging Face Spaces installs this. The package itself is installed from source
-# so src/factlayer travels with the Space.
-.
+# Hugging Face Spaces installs this before running app.py. Gradio itself comes with
+# the Space image. The package is not installed from source here: app.py puts src/
+# on the path instead, which is one less thing to go wrong on someone else's image.
+pdfplumber>=0.11
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+openai>=1.40
+rapidfuzz>=3.9
+python-dotenv>=1.0

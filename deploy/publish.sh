@@ -66,7 +66,7 @@ if [ -n "${HF_TOKEN:-}" ]; then
   created=$(curl -sS -X POST https://huggingface.co/api/repos/create \
     -H "Authorization: Bearer $HF_TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"type\":\"space\",\"name\":\"$space\",\"sdk\":\"docker\",\"private\":false}" \
+    -d "{\"type\":\"space\",\"name\":\"$space\",\"sdk\":\"gradio\",\"private\":false}" \
     -o /dev/null -w "%{http_code}" 2>/dev/null || true)
   created="${created:-000}"
   echo "  create: HTTP $created"
