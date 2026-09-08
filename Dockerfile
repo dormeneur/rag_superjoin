@@ -2,7 +2,7 @@
 # starter documents, so the site opens with something to look at.
 FROM python:3.11-slim
 
-# Hugging Face Spaces runs the container as uid 1000.
+# Hugging Face Spaces runs the container as uid 1000; other hosts do not care.
 RUN useradd --create-home --uid 1000 app
 WORKDIR /app
 
@@ -22,5 +22,7 @@ ENV FACTLAYER_DB=/app/factlayer.db \
     FACTLAYER_WORKERS=4 \
     PYTHONUNBUFFERED=1
 
+# The host names the port it will send traffic to, and they do not agree: Spaces
+# expects 7860, Render and most others inject PORT. Read it rather than assume it.
 EXPOSE 7860
-CMD ["uvicorn", "factlayer.api:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["sh", "-c", "uvicorn factlayer.api:app --host 0.0.0.0 --port ${PORT:-7860}"]
