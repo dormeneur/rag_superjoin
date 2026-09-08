@@ -70,11 +70,10 @@ one command and no rebuild:
 HF_TOKEN=hf_xxx deploy/publish.sh          # creates the Space and pushes to it
 ```
 
-The username is read from the token. Some accounts cannot create a Space through the
-API and get HTTP 402 back; in that case create it once at
-<https://huggingface.co/new-space> with **Manual setup**, SDK **Docker → Blank**,
-hardware **CPU basic**, visibility **Public**, then run the command again. The script
-says as much when it happens. Rebuild the corpus first only if you want to:
+The username is read from the token. Creating a Space through the API needs the paid
+tier and answers 402 otherwise, so the script treats that as "it already exists" and
+pushes anyway; if the push then reports the repository is missing, it prints the half
+minute of clicking that fixes it. Rebuild the corpus first only if you want to:
 
 ```bash
 python -m factlayer ingest data/*/*.pdf

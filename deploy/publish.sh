@@ -68,29 +68,13 @@ if [ -n "${HF_TOKEN:-}" ]; then
   echo "  create: HTTP $created"
 fi
 
-# 402 and 403 mean the account cannot create a Space through the API. Creating it
-# once in the browser costs nothing and makes every later push work.
+# A failure here is not fatal. Creating a Space through the API returns 402 on
+# accounts without the paid tier, and it also fails when the Space already exists.
+# Either way the push below is what decides, so it always gets its turn.
 case "$created" in
-  402|403)
-    cat >&2 <<EOF
-
-The API would not create the Space (HTTP $created). Create it once by hand, which
-takes about thirty seconds, then run this command again:
-
-  1. Open  https://huggingface.co/new-space
-  2. Choose "Manual setup" (not the AI agent option)
-  3. Space name:   $space
-     Licence:      mit
-     Select the SDK: Gradio  ->  Blank   (Docker Spaces are a paid feature)
-     Hardware:     the free tier offered
-     Visibility:   Public
-  4. Click "Create Space", then re-run:
-
-       HF_TOKEN=... deploy/publish.sh $user $space
-
-EOF
-    exit 1
-    ;;
+  200|201) echo "  the Space was created" ;;
+  409)     echo "  the Space already exists" ;;
+  *)       echo "  could not create it through the API; assuming it already exists" ;;
 esac
 
 cd "$staging"
@@ -103,7 +87,24 @@ if [ -n "${HF_TOKEN:-}" ]; then
   remote="https://$user:$HF_TOKEN@huggingface.co/spaces/$user/$space"
 fi
 echo "Pushing to $user/$space ..."
-git push --force "$remote" HEAD:main
+if ! git push --force "$remote" HEAD:main; then
+  cat >&2 <<EOF
+
+The push failed. If it said "Repository not found", the Space does not exist yet.
+Create it once in the browser — it is free and takes about thirty seconds — then
+run this command again:
+
+  1. Open  https://huggingface.co/new-space
+  2. Choose "Manual setup", not the AI agent option
+  3. Owner / name:  $user / $space
+     Select the SDK: Gradio  ->  Blank   (Docker Spaces are a paid feature)
+     Hardware:       the free tier offered
+     Visibility:     Public
+  4. Click "Create Space", then re-run this command.
+
+EOF
+  exit 1
+fi
 
 echo
 echo "Deployed. It builds for a few minutes, then serves at:"
