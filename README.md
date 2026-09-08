@@ -135,8 +135,8 @@ stopped when the same file is uploaded again.
 
 **AI tools used.** Built with Claude Code (Opus). The [Ponytail](https://github.com/DietrichGebert/ponytail)
 YAGNI ladder was used as the working rule throughout — reuse before writing, standard
-library before dependency, minimum that works — which is why there are nine source
-modules and no framework beyond FastAPI.
+library before dependency, minimum that works — which is why the whole system is nine
+modules and a command line, with no framework beyond FastAPI and no vector database.
 
 ## The Four Cases
 
