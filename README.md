@@ -47,7 +47,7 @@ rate-limited:
 Command line, for loading several PDFs at once:
 
 ```bash
-python -m factlayer ingest data/delhivery/*.pdf
+python -m factlayer ingest data/*/*.pdf
 python -m factlayer export --out samples
 ```
 
