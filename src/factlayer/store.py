@@ -409,7 +409,9 @@ class Store:
 
     def _best_relation(self, verdict: str) -> dict[str, Any] | None:
         """Prefer an example spanning two documents: one document agreeing with
-        itself is not what the assignment is asking to see."""
+        itself is not what the assignment is asking to see. Failing that, prefer one
+        spanning two pages — two rows of a single table disagreeing is usually the
+        extractor losing track of which row it was reading, not a real dispute."""
         preference = {
             reason: rank for rank, reason in enumerate(self.EXPLAINED_PREFERENCE)
         }
@@ -417,6 +419,7 @@ class Store:
             """
             SELECT r.*,
                    (a.doc_id != b.doc_id) AS cross_document,
+                   (a.page_no != b.page_no) AS cross_page,
                    COALESCE(a.confidence, 0) + COALESCE(b.confidence, 0) AS strength
             FROM relations r
             JOIN claims a ON a.id = r.claim_a
@@ -424,6 +427,7 @@ class Store:
             WHERE r.verdict = ?
               AND a.status = 'active' AND b.status = 'active'
             ORDER BY cross_document DESC,
+                     cross_page DESC,
                      CASE r.reason_code {cases} ELSE ? END ASC,
                      strength DESC,
                      r.id ASC

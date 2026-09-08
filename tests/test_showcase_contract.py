@@ -193,3 +193,41 @@ def test_a_verdict_with_no_examples_is_reported_as_missing():
     assert picks["corroborated"] is not None
     assert picks["contradiction"] is None
     assert picks["explained"] is None
+
+
+def test_a_contradiction_across_pages_beats_one_inside_a_single_table():
+    """Two rows of one table disagreeing is usually the extractor losing which row
+    it was on. The same claim made differently on two separate pages is far more
+    likely to be a real disagreement, so that is what gets shown."""
+    store = seeded()
+    a_id, _ = doc_ids(store)
+    row_a, row_b, page_a, page_b = stored(
+        store,
+        make_claim(doc_id=a_id, metric_canonical="alpha", value_num=1.0, page_no=46),
+        make_claim(doc_id=a_id, metric_canonical="alpha", value_num=2.0, page_no=46,
+                   char_start=200, char_end=260),
+        make_claim(doc_id=a_id, metric_canonical="beta", value_num=1.0, page_no=30),
+        make_claim(doc_id=a_id, metric_canonical="beta", value_num=2.0, page_no=85),
+    )
+    link(store, row_a, row_b, "CONTRADICTS", "VALUE_CONFLICT")
+    link(store, page_a, page_b, "CONTRADICTS", "VALUE_CONFLICT")
+
+    picked = store.showcase()["contradiction"]
+    assert {picked["claim_a"], picked["claim_b"]} == {page_a.id, page_b.id}
+
+
+def test_crossing_documents_still_outranks_crossing_pages():
+    store = seeded()
+    a_id, b_id = doc_ids(store)
+    same_a, same_b, cross_a, cross_b = stored(
+        store,
+        make_claim(doc_id=a_id, metric_canonical="alpha", value_num=1.0, page_no=30),
+        make_claim(doc_id=a_id, metric_canonical="alpha", value_num=2.0, page_no=85),
+        make_claim(doc_id=a_id, metric_canonical="beta", value_num=1.0, page_no=7),
+        make_claim(doc_id=b_id, metric_canonical="beta", value_num=2.0, page_no=7),
+    )
+    link(store, same_a, same_b, "CONTRADICTS", "VALUE_CONFLICT")
+    link(store, cross_a, cross_b, "CONTRADICTS", "VALUE_CONFLICT")
+
+    picked = store.showcase()["contradiction"]
+    assert {picked["claim_a"], picked["claim_b"]} == {cross_a.id, cross_b.id}
