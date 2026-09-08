@@ -66,8 +66,10 @@ Rules
   differently. Only coin a new key when nothing in the list fits. Keys never contain
   a period, year or unit.
 
-- The page may name its subject only in a heading, a footer or a tagline. Prefer the
-  document's own name for the subject over a phrase used to describe it.
+- Name the subject. Pages say "the Company", "we", "our business", "the Bank" and
+  "the Group"; those are not entities. Resolve them to the named subject the
+  document is about, which is given below. Never use a pronoun, a bare "company",
+  or a marketing phrase as an entity.
 
 Reply with a JSON array of objects and nothing else. An empty array is a valid answer.\
 """
@@ -104,11 +106,12 @@ def claims_from_page(
     doc_id: str,
     doc_date: date | None,
     vocabulary: dict[str, list[str]],
+    subject: str = "",
 ) -> list[Claim]:
     """Extract and ground the claims on one page. Raises when the model is
     unreachable or unreadable, so the caller can lose one page rather than the
     whole document."""
-    reply = complete_json(SYSTEM, _prompt(page, vocabulary), max_tokens=8192)
+    reply = complete_json(SYSTEM, _prompt(page, vocabulary, subject), max_tokens=8192)
     if not isinstance(reply, list):
         return []
 
@@ -121,10 +124,11 @@ def claims_from_page(
     return claims
 
 
-def _prompt(page: Page, vocabulary: dict[str, list[str]]) -> str:
+def _prompt(page: Page, vocabulary: dict[str, list[str]], subject: str = "") -> str:
     known_entities = ", ".join(vocabulary.get("entities", [])[:MAX_VOCABULARY]) or "(none yet)"
     known_metrics = ", ".join(vocabulary.get("metrics", [])[:MAX_VOCABULARY]) or "(none yet)"
     return (
+        f"This document is: {subject or '(unknown)'}\n"
         f"Known entity_canonical keys: {known_entities}\n"
         f"Known metric_canonical keys: {known_metrics}\n\n"
         f"--- page {page.number} ---\n{page.text[:MAX_PAGE_CHARS]}"
@@ -157,13 +161,19 @@ def _to_claim(item, page, doc_id, doc_date, vocabulary) -> Claim | None:
     period = parse_period(_clean(item.get("period")) or "")
     scope = item.get("scope") if isinstance(item.get("scope"), dict) else {}
 
+    entity_canonical = _canonical(
+        item.get("entity_canonical"), normalize_metric(normalize_entity(entity)),
+        vocabulary.get("entities", []),
+    )
+    if not entity_canonical:
+        # Facts are grouped and compared by entity. One that normalises to nothing
+        # can never be grouped, so it would sit in the store looking like a fact.
+        return None
+
     claim = Claim(
         kind=kind,
         entity=entity,
-        entity_canonical=_canonical(
-            item.get("entity_canonical"), normalize_metric(normalize_entity(entity)),
-            vocabulary.get("entities", []),
-        ),
+        entity_canonical=entity_canonical,
         metric=metric,
         metric_canonical=_canonical(
             item.get("metric_canonical"), normalize_metric(metric),

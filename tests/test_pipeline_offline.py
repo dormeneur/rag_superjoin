@@ -438,3 +438,29 @@ def test_only_a_finished_document_counts_as_a_duplicate(fake_llm, pdf_bytes):
     data = pdf_bytes([REVENUE_PAGE])
     assert ingest(data, "a.pdf").status == "complete"
     assert ingest(data, "a.pdf").status == "duplicate"
+
+
+# ------------------------------------------------- entities must be identifiable
+
+def test_a_claim_with_no_usable_entity_is_skipped(fake_llm, pdf_bytes):
+    """Entity is the key facts are grouped and compared by. A claim whose subject
+    normalises to nothing cannot be grouped with anything, and would sit in the
+    store looking like a fact while being unusable."""
+    item = revenue_claim()[0]
+    item["entity"], item["entity_canonical"] = "—", ""
+    fake_llm({"8,142 crore": [item]})
+    assert ingest(pdf_bytes([REVENUE_PAGE]), "doc.pdf").claims_extracted == 0
+
+
+def test_the_document_subject_is_offered_to_the_extractor(fake_llm, pdf_bytes):
+    """Pages say "the Company" and "our business". The extractor is told what the
+    document is about so it can resolve those to a name instead of coining an
+    entity called "company"."""
+    # The first mapping can only match a prompt that already carries the subject, so
+    # it fires for the page call and not for the metadata call that produced it.
+    fake_llm({
+        "This document is: Delhivery Limited": revenue_claim(),
+        "Revenue from operations": {"title": "Delhivery Limited",
+                                    "publisher": None, "date": None},
+    })
+    assert ingest(pdf_bytes([REVENUE_PAGE]), "doc.pdf").claims_extracted == 1

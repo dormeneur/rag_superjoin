@@ -81,6 +81,7 @@ def _read_pending_pages(
     store: Store, doc_id: str, filename: str, page_count: int, *, resumed: bool
 ) -> IngestResult:
     doc_date = _document_date(store, doc_id)
+    subject = _document_subject(store, doc_id, filename)
     pending = store.pages(doc_id, unread_only=True)
 
     # A page the filter passed over is settled, not pending: mark it read so a later
@@ -92,7 +93,8 @@ def _read_pending_pages(
     if cap:
         worth_reading = worth_reading[:cap]
 
-    claims, read_pages_numbers = _extract_all(store, worth_reading, doc_id, doc_date)
+    claims, read_pages_numbers = _extract_all(
+        store, worth_reading, doc_id, doc_date, subject)
     store.mark_pages_read(doc_id, read_pages_numbers)
 
     stored = store.add_claims(_consolidate(claims, store.vocabulary()))
@@ -164,8 +166,17 @@ def rebuild_relations(store: Store | None = None) -> int:
 # ------------------------------------------------------------------- extraction
 
 
+def _document_subject(store: Store, doc_id: str, filename: str) -> str:
+    """What the document is about, so a page saying "the Company" can be resolved to
+    a name instead of coining an entity called "company"."""
+    document = store.document(doc_id) or {}
+    parts = [document.get("title"), document.get("publisher")]
+    return " — ".join(part for part in parts if part) or filename
+
+
 def _extract_all(
-    store: Store, pages: list[Page], doc_id: str, doc_date: date | None
+    store: Store, pages: list[Page], doc_id: str, doc_date: date | None,
+    subject: str = "",
 ) -> tuple[list[Claim], list[int]]:
     """Read pages in parallel and report which ones succeeded. A page that fails
     stays unread, so the next run retries it instead of losing it."""
@@ -176,7 +187,8 @@ def _extract_all(
 
     def read(page: Page):
         return extract.claims_from_page(
-            page, doc_id=doc_id, doc_date=doc_date, vocabulary=vocabulary
+            page, doc_id=doc_id, doc_date=doc_date, vocabulary=vocabulary,
+            subject=subject,
         )
 
     claims: list[Claim] = []
