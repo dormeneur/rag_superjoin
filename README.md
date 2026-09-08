@@ -108,7 +108,7 @@ Browsing the corpus needs no credentials. To let a deployment accept new PDFs, s
 
 ## Video Demo
 
-_To be added._
+_To be added._ Shot list used to record it: [docs/DEMO.md](docs/DEMO.md).
 
 ## Approach
 
