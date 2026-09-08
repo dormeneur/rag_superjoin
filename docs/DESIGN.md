@@ -3,9 +3,9 @@
 ## Shape
 
 ```
-PDF ─ pdf.py ─ pages ─ filter ─ extract.py ─ claims ─ ground ─ store.py
-                                    │                            │
-                                  llm.py                     reconcile.py ─ relations
+PDF ─ pdf.py ─ pages ─ extract.py ─ claims ─ ground ─ store.py
+                          │                             │
+                        llm.py                      reconcile.py ─ relations
 ```
 
 One module per stage. No stage knows about another's internals.
@@ -52,10 +52,19 @@ units compatible?    different currency   → RECONCILABLE  CURRENCY_MISMATCH
                      different dimension  → UNRELATED
 periods              disjoint             → UNRELATED
                      one inside the other → RECONCILABLE  PERIOD_MISMATCH
-values agree?        yes                  → CORROBORATES
-scope conflict?      yes                  → RECONCILABLE  SCOPE_MISMATCH
+values agree?        yes                  → CORROBORATES  VALUE_AGREEMENT
+period undeclared    either side silent   → RECONCILABLE  PERIOD_UNDECLARED
+scope conflict?      both state, differ   → RECONCILABLE  SCOPE_MISMATCH
+scope undeclared?    one states, one not  → RECONCILABLE  SCOPE_UNDECLARED
 otherwise                                 → CONTRADICTS   VALUE_CONFLICT
 ```
+
+**Silence is never read as agreement.** Twice this mattered on real data. A
+shareholder's total holding states no period; comparing it against dated individual
+purchases produced 77 false contradictions in one document. A figure qualified
+"standalone" on one side and unqualified on the other is not a disagreement either.
+Both now withhold the accusation and say what was missing. Agreement is still checked
+first, so two undated figures that match still corroborate.
 
 Attributes: scope conflict → RECONCILABLE; same value → CORROBORATES; stated validity
 windows disjoint → `TEMPORAL_SUCCESSION`; only publication dates differ →
@@ -81,15 +90,24 @@ The LLM rewrites the prose of an explanation. It may not change a verdict.
 ## Scale
 
 - pages read one at a time, cache flushed — flat memory on a 500-page report
-- page filter keeps ~91% of the starter set; these reports really are that dense
-- sliding-window rate limiter per provider, four providers as fallback
-- resumable: every page is marked read, so a stalled document continues on re-upload
+- a page is skipped only when it has too little text to state anything. An earlier
+  filter also required a currency amount, a percentage or a role keyword; measured,
+  it skipped 9% of pages while silently dropping facts that carried no digits, so it
+  was removed
+- sliding-window rate limiter, counted per provider *and* per model. A provider may
+  list several models: quotas are per model, so that is both more allowance and a
+  fallback, and the client picks the least busy one
+- when a provider states how long to wait, that delay is used instead of a guess
+- resumable: every page is marked read, so a document stopped by a quota — or by the
+  process being killed — continues where it left off
 - reconciliation blocks on (entity, metric), so a new document compares against a
   bucket rather than against every fact ever stored
 
 ## Known weaknesses
 
-- multi-column pages interleave on extraction (Board of Directors pages do this)
+- multi-column pages interleave on extraction. This is the single largest source of
+  quarantined claims: in the 2022 prospectus, 158 of 168 quarantined claims quote a
+  sentence that the reflowed page text does not contain
 - no OCR: a scanned PDF is refused with a clear message rather than silently empty
 - cross-currency facts are never compared; no FX rates
 - canonical-name merging is fuzzy above 92% with a digit guard — it can still

@@ -95,10 +95,14 @@ Blocking is then an exact match. This drops a heavyweight dependency, works offl
 gives a schema that grows as new kinds of facts appear.
 
 **Free tiers, taken seriously.** Groq, Gemini, OpenRouter and Cerebras all speak the
-OpenAI wire format, so a provider is a row of config rather than an integration. The
-list doubles as the retry policy. A sliding-window limiter paces requests below the
-published limit instead of collecting 429s, and ingestion is resumable: every page is
-marked read, so a document interrupted by a quota re-uploads and continues.
+OpenAI wire format, so a provider is a row of config rather than an integration, and
+the list doubles as the retry policy. Quotas are counted per model, so a provider may
+name several and the client uses whichever is least busy — more allowance and a
+fallback at once. A sliding-window limiter paces requests below the published limit
+rather than collecting 429s, and when a provider says how long to wait, that number is
+used instead of a guess. Ingestion is resumable: every page is marked read, so a
+document stopped by a quota — or by the process being killed — continues where it
+stopped when the same file is uploaded again.
 
 **AI tools used.** Built with Claude Code (Opus). The [Ponytail](https://github.com/DietrichGebert/ponytail)
 YAGNI ladder was used as the working rule throughout — reuse before writing, standard
