@@ -342,6 +342,10 @@ class Store:
         self.connection.commit()
         return cursor.rowcount
 
+    def clear_relations(self) -> None:
+        self.connection.execute("DELETE FROM relations")
+        self.connection.commit()
+
     def relations(
         self, verdict: str | None = None, claim_id: str | None = None,
         limit: int | None = None, offset: int = 0,

@@ -100,6 +100,11 @@ def _compare_measurements(a, b, diff, tolerance, percent_tolerance) -> Verdict:
         # Consolidated vs standalone, provisional vs revised, estimate vs actual:
         # the documents are not talking about quite the same thing.
         return Verdict(RECONCILABLE, "SCOPE_MISMATCH", diff)
+    if scope["only_a"] or scope["only_b"]:
+        # One document qualifies the figure and the other is simply silent. Silence
+        # is not agreement, and calling this a contradiction claims more than the
+        # evidence supports.
+        return Verdict(RECONCILABLE, "SCOPE_UNDECLARED", diff)
 
     return Verdict(CONTRADICTS, "VALUE_CONFLICT", diff)
 
@@ -197,6 +202,9 @@ def _compare_attributes(a, b, diff) -> Verdict:
         diff["doc_date"] = {"a": a.doc_date.isoformat(), "b": b.doc_date.isoformat()}
         return Verdict(RECONCILABLE, "TEMPORAL_SUCCESSION_INFERRED", diff)
 
+    if scope["only_a"] or scope["only_b"]:
+        return Verdict(RECONCILABLE, "SCOPE_UNDECLARED", diff)
+
     return Verdict(CONTRADICTS, "ATTRIBUTE_VALUE_CONFLICT", diff)
 
 
@@ -231,6 +239,13 @@ def describe(a: Claim, b: Claim, verdict: Verdict) -> str:
         )
         return (f"The documents qualify this differently ({pairs}), so {left} and {right} "
                 f"are measuring different things rather than disagreeing.")
+    if reason == "SCOPE_UNDECLARED":
+        stated = {**verdict.dimension_diff["scope"]["only_a"],
+                  **verdict.dimension_diff["scope"]["only_b"]}
+        named = "; ".join(f"{key}: {value}" for key, value in stated.items())
+        return (f"One document qualifies this ({named}) and the other does not. "
+                f"{left} and {right} may be measuring different things, so this is "
+                f"not treated as a disagreement.")
     if reason == "CURRENCY_MISMATCH":
         return (f"Reported in different currencies ({a.unit} and {b.unit}). Comparing "
                 f"{left} with {right} needs an exchange rate for the period, which the "

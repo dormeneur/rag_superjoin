@@ -38,7 +38,9 @@
   .CONTRADICTS { color: var(--conflict); background: var(--conflict-bg); }
   .RECONCILABLE { color: var(--explained); background: var(--explained-bg); }
   .why { margin: 10px 0 12px; }
-  .evidence { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .evidence { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; }
+  .evidence > div { display: flex; flex-direction: column; }
+  .evidence blockquote { margin-top: auto; }
   @media (max-width: 720px) { .evidence { grid-template-columns: 1fr; } }
   blockquote { margin: 6px 0 0; padding: 9px 12px; background: #f6f6f2; border-left: 3px solid var(--line);
                border-radius: 0 5px 5px 0; font-size: 13.5px; }

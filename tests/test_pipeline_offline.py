@@ -368,3 +368,49 @@ def test_a_page_whose_only_fact_carries_no_digits_is_still_read(fake_llm, pdf_by
         }]
     })
     assert ingest(pdf_bytes([page]), "doc.pdf").claims_extracted == 1
+
+
+# ------------------------------------------------- reconciliation is separable
+
+def test_relations_can_be_rebuilt_without_re_reading_the_pdfs(fake_llm, pdf_bytes):
+    """Extraction is expensive; the rules are cheap and change often. Rebuilding must
+    not need the documents again, and must reproduce the same verdicts."""
+    from factlayer.pipeline import rebuild_relations
+
+    conflicting = REVENUE_PAGE.replace("8,142", "7,900")
+    fake_llm({
+        "was Rs. 8,142": revenue_claim(),
+        "7,900": revenue_claim(quote=conflicting, value="Rs. 7,900 crore"),
+    })
+    ingest(pdf_bytes([REVENUE_PAGE]), "a.pdf")
+    ingest(pdf_bytes([conflicting]), "b.pdf")
+    before = {(r["claim_a"], r["claim_b"], r["verdict"], r["reason_code"])
+              for r in Store().relations()}
+    assert before
+
+    rebuilt = rebuild_relations()
+    after = {(r["claim_a"], r["claim_b"], r["verdict"], r["reason_code"])
+             for r in Store().relations()}
+
+    assert rebuilt == len(after)
+    assert after == before
+    assert len(Store().claims()) == 2, "rebuilding must not touch the facts"
+
+
+def test_rebuilding_drops_relations_the_rules_no_longer_produce(fake_llm, pdf_bytes):
+    from factlayer.pipeline import rebuild_relations
+    from factlayer.store import Store as S
+
+    fake_llm({"8,142 crore": revenue_claim()})
+    ingest(pdf_bytes([REVENUE_PAGE]), "a.pdf")
+    store = S()
+    claim = store.claims()[0]
+    store.add_relations([{
+        "claim_a": claim.id, "claim_b": claim.id, "verdict": "CONTRADICTS",
+        "reason_code": "STALE", "dimension_diff": {}, "explanation": "x",
+        "decided_by": "rules",
+    }])
+    assert store.relations()
+
+    rebuild_relations()
+    assert [r for r in S().relations() if r["reason_code"] == "STALE"] == []

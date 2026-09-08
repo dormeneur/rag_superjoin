@@ -310,3 +310,44 @@ def test_compare_does_not_call_an_llm(monkeypatch):
 
     monkeypatch.setattr(llm, "complete_json", explode)
     assert compare(make_claim(), make_claim(value_num=1.0)).verdict in VERDICTS
+
+
+# ------------------------------------------- silence is not the same as agreement
+
+def test_a_qualifier_on_only_one_side_is_not_a_contradiction():
+    """One document says 'standalone', the other says nothing. They may well be
+    measuring different things, so accusing them of contradicting each other claims
+    more than the evidence supports."""
+    a = make_claim(value_num=8.142e10, scope={"consolidation": "standalone"})
+    b = make_claim(value_num=7.500e10, scope={})
+    assert verdict_of(a, b) == "RECONCILABLE"
+    assert reason_of(a, b) == "SCOPE_UNDECLARED"
+
+
+def test_matching_qualifiers_do_not_excuse_a_conflict():
+    """Both documents say consolidated and still disagree. That is a contradiction."""
+    a = make_claim(value_num=8.142e10, scope={"consolidation": "consolidated"})
+    b = make_claim(value_num=7.500e10, scope={"consolidation": "consolidated"})
+    assert verdict_of(a, b) == "CONTRADICTS"
+
+
+def test_both_sides_silent_is_still_a_contradiction():
+    """If neither document qualifies the figure, there is nothing left to explain."""
+    a = make_claim(value_num=8.142e10, scope={})
+    b = make_claim(value_num=7.500e10, scope={})
+    assert verdict_of(a, b) == "CONTRADICTS"
+
+
+def test_an_undeclared_qualifier_names_what_was_missing():
+    a = make_claim(value_num=8.142e10, scope={"consolidation": "standalone"})
+    b = make_claim(value_num=7.500e10, scope={})
+    diff = compare(a, b).dimension_diff
+    assert "consolidation" in diff["scope"]["only_a"]
+
+
+def test_an_undeclared_qualifier_does_not_excuse_conflicting_attributes():
+    a = attribute(doc_id="d", doc_date=date(2024, 6, 30), value_text="Director",
+                  scope={"organisation": "delhivery"})
+    b = attribute(doc_id="d", doc_date=date(2024, 6, 30), value_text="Auditor", scope={})
+    assert verdict_of(a, b) == "RECONCILABLE"
+    assert reason_of(a, b) == "SCOPE_UNDECLARED"

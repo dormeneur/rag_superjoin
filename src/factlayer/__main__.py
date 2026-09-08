@@ -11,7 +11,7 @@ import json
 import sys
 from pathlib import Path
 
-from .pipeline import IngestError, ingest
+from .pipeline import IngestError, ingest, rebuild_relations
 from .store import Store
 
 
@@ -25,9 +25,14 @@ def main(argv: list[str] | None = None) -> int:
     export_command = commands.add_parser("export", help="write the layer out as JSON")
     export_command.add_argument("--out", type=Path, default=Path("samples"))
 
+    commands.add_parser("reconcile", help="recompare stored facts after a rule change")
+
     args = parser.parse_args(argv)
     if args.command == "ingest":
         return _ingest(args.paths)
+    if args.command == "reconcile":
+        print(f"{rebuild_relations()} relationships")
+        return 0
     return _export(args.out)
 
 

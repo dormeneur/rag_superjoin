@@ -147,6 +147,17 @@ def _document_date(store: Store, doc_id: str) -> date | None:
     return metadata.get("doc_date")
 
 
+def rebuild_relations(store: Store | None = None) -> int:
+    """Recompare every stored fact and replace the relations table.
+
+    Extraction is the expensive half and the rules are the half that changes, so
+    they are separable: tuning a verdict rule costs a rebuild, not a re-read.
+    """
+    store = store or Store()
+    store.clear_relations()
+    return _relate(store, store.claims(status="active"))
+
+
 # ------------------------------------------------------------------- extraction
 
 
