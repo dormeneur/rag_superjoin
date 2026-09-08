@@ -51,12 +51,16 @@ class IngestResult:
 def ingest(
     data: bytes, filename: str, *, store: Store | None = None,
     require_provider: bool = False,
+    provider_override: llm.ProviderOverride | None = None,
 ) -> IngestResult:
     """Add a PDF to the knowledge layer, or carry on with one that stalled.
 
     A document that was left partial — because a free tier ran out, a provider was
     down, or a page cap was set — is resumed from the pages it never read. A
     document that finished is not read again.
+
+    provider_override lets one caller bring their own key for this document only,
+    tried ahead of whatever the server itself has configured.
     """
     store = store or Store()
 
@@ -70,9 +74,10 @@ def ingest(
         return _already_have_it(store, existing)
 
     if existing:
-        _require_provider(require_provider)
+        _require_provider(require_provider, provider_override)
         return _read_pending_pages(store, existing["id"], existing["filename"],
-                                   existing["page_count"], resumed=True)
+                                   existing["page_count"], resumed=True,
+                                   provider_override=provider_override)
 
     # Whether the file is readable does not depend on how the server is configured,
     # so it is settled before anything else can refuse the request.
@@ -81,9 +86,9 @@ def ingest(
     except PdfError as exc:
         raise IngestError(str(exc)) from exc
 
-    _require_provider(require_provider)
+    _require_provider(require_provider, provider_override)
 
-    metadata = extract.document_metadata(pages)
+    metadata = extract.document_metadata(pages, provider_override=provider_override)
     doc_id = store.add_document(
         filename=filename,
         sha256=digest,
@@ -95,13 +100,15 @@ def ingest(
         stored_path=_keep_a_copy(data, digest, filename),
     )
     store.add_pages(doc_id, pages)
-    return _read_pending_pages(store, doc_id, filename, len(pages), resumed=False)
+    return _read_pending_pages(store, doc_id, filename, len(pages), resumed=False,
+                               provider_override=provider_override)
 
 
 def _read_pending_pages(
-    store: Store, doc_id: str, filename: str, page_count: int, *, resumed: bool
+    store: Store, doc_id: str, filename: str, page_count: int, *, resumed: bool,
+    provider_override: llm.ProviderOverride | None = None,
 ) -> IngestResult:
-    doc_date = _document_date(store, doc_id)
+    doc_date = _document_date(store, doc_id, provider_override=provider_override)
     subject = _document_subject(store, doc_id, filename)
     pending = store.pages(doc_id, unread_only=True)
 
@@ -115,7 +122,7 @@ def _read_pending_pages(
         worth_reading = worth_reading[:cap]
 
     claims, read_pages_numbers = _extract_all(
-        store, worth_reading, doc_id, doc_date, subject)
+        store, worth_reading, doc_id, doc_date, subject, provider_override=provider_override)
     store.mark_pages_read(doc_id, read_pages_numbers)
 
     stored = store.add_claims(_consolidate(claims, store.vocabulary()))
@@ -139,12 +146,13 @@ def _read_pending_pages(
     )
 
 
-def _require_provider(required: bool) -> None:
-    if required and not llm.available_providers():
+def _require_provider(required: bool, provider_override: llm.ProviderOverride | None = None) -> None:
+    if required and provider_override is None and not llm.available_providers():
         raise NoProviderError(
             "No model provider is configured on this deployment, so new PDFs cannot "
             "be read. The documents already loaded were processed in advance and are "
-            "fully browsable."
+            "fully browsable. Paste your own free API key on the upload page to read "
+            "one yourself."
         )
 
 
@@ -163,14 +171,16 @@ def _already_have_it(store: Store, existing: dict) -> IngestResult:
     )
 
 
-def _document_date(store: Store, doc_id: str) -> date | None:
+def _document_date(
+    store: Store, doc_id: str, *, provider_override: llm.ProviderOverride | None = None
+) -> date | None:
     """Publication date decides whether a later document supersedes an earlier one,
     so a resume retries it when the first attempt could not reach a provider."""
     document = store.document(doc_id) or {}
     if document.get("doc_date"):
         return date.fromisoformat(document["doc_date"])
 
-    metadata = extract.document_metadata(store.pages(doc_id)[:3])
+    metadata = extract.document_metadata(store.pages(doc_id)[:3], provider_override=provider_override)
     if metadata.get("doc_date"):
         store.connection.execute(
             "UPDATE documents SET doc_date = ?, title = COALESCE(title, ?),"
@@ -206,7 +216,7 @@ def _document_subject(store: Store, doc_id: str, filename: str) -> str:
 
 def _extract_all(
     store: Store, pages: list[Page], doc_id: str, doc_date: date | None,
-    subject: str = "",
+    subject: str = "", *, provider_override: llm.ProviderOverride | None = None,
 ) -> tuple[list[Claim], list[int]]:
     """Read pages in parallel and report which ones succeeded. A page that fails
     stays unread, so the next run retries it instead of losing it."""
@@ -218,7 +228,7 @@ def _extract_all(
     def read(page: Page):
         return extract.claims_from_page(
             page, doc_id=doc_id, doc_date=doc_date, vocabulary=vocabulary,
-            subject=subject,
+            subject=subject, provider_override=provider_override,
         )
 
     claims: list[Claim] = []

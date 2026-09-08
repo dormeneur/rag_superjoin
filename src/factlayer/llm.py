@@ -11,19 +11,31 @@ decides what it means.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import threading
 import time
 from collections import deque
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 from . import config
 
 
 class LLMUnavailable(RuntimeError):
     """No configured provider could answer."""
+
+
+class ProviderOverride(NamedTuple):
+    """A caller's own key for one request, tried ahead of the server's own.
+
+    Never written to disk, never logged, never echoed back — it lives only for the
+    duration of the call that carries it.
+    """
+
+    provider: str
+    api_key: str
 
 
 class LLMOutputError(ValueError):
@@ -104,18 +116,30 @@ def models_by_availability(provider: str) -> list[str]:
     )
 
 
-def complete_json(system: str, user: str, *, max_tokens: int = 4096) -> Any:
-    """Ask the first provider that will answer, and parse its reply as JSON."""
-    order = config.provider_order()
-    if not order:
+def complete_json(
+    system: str, user: str, *, max_tokens: int = 4096,
+    provider_override: ProviderOverride | None = None,
+) -> Any:
+    """Ask the first provider that will answer, and parse its reply as JSON.
+
+    A caller's own key goes first — they went to the trouble of providing it — and
+    the server's configured providers are still tried after it, so one bad key
+    degrades to the normal fallback chain rather than failing outright.
+    """
+    attempts: list[tuple[str, str | None]] = []
+    if provider_override is not None:
+        attempts.append((provider_override.provider, provider_override.api_key))
+    attempts += [(name, None) for name in config.provider_order()]
+
+    if not attempts:
         raise LLMUnavailable("No LLM providers configured. See .env.example.")
 
     failures: list[str] = []
-    for name in order:
+    for name, key in attempts:
         try:
-            text = _call(name, system, user, max_tokens)
+            text = _call(name, system, user, max_tokens, api_key=key)
         except LLMUnavailable as exc:
-            failures.append(f"{name}: {exc}")
+            failures.append(f"{'your key on ' if key else ''}{name}: {exc}")
             continue
         return _parse_json(text)
 
@@ -174,26 +198,32 @@ def is_transient(exc: Exception) -> bool:
 # ------------------------------------------------------------------- the callers
 
 
-def _call(name: str, system: str, user: str, max_tokens: int) -> str:
+def _call(name: str, system: str, user: str, max_tokens: int, *, api_key: str | None = None) -> str:
     if name == "fake":
         return _fake(user)
 
     provider = config.PROVIDERS.get(name)
     if provider is None:
         raise LLMUnavailable(f"unknown provider {name!r}")
-    api_key = os.getenv(provider.key_env)
-    if not api_key:
+    key = api_key or os.getenv(provider.key_env)
+    if not key:
         raise LLMUnavailable(f"{provider.key_env} is not set")
 
     from openai import OpenAI  # imported lazily so tests never need the network stack
 
-    client = OpenAI(api_key=api_key, base_url=provider.base_url, timeout=90.0)
+    client = OpenAI(api_key=key, base_url=provider.base_url, timeout=90.0)
     attempts = config.provider_attempts()
     problems: list[str] = []
 
+    # A caller's own key is a different account with its own quota. It gets its own
+    # pacing bucket and only the provider's documented default model — our env's
+    # model list is our configuration, not theirs, and does not apply to their key.
+    models = [provider.default_model] if api_key else models_by_availability(name)
+
     # Quotas are per model, so each model listed for this key is its own allowance.
-    for model in models_by_availability(name):
-        limiter = limiter_for(f"{name}:{model}")
+    for model in models:
+        bucket = f"{name}:byok:{_fingerprint(key)}" if api_key else f"{name}:{model}"
+        limiter = limiter_for(bucket)
         for attempt in range(attempts):
             limiter.acquire()
             try:
@@ -216,6 +246,12 @@ def _call(name: str, system: str, user: str, max_tokens: int) -> str:
                 break
 
     raise LLMUnavailable("; ".join(problems) or f"{name} did not answer")
+
+
+def _fingerprint(api_key: str) -> str:
+    """A one-way tag for a key, just long enough to keep rate-limit buckets apart —
+    never the key itself, so it is safe to use even in a bucket name."""
+    return hashlib.sha256(api_key.encode()).hexdigest()[:10]
 
 
 def _fake(user: str) -> str:

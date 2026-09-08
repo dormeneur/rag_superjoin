@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 
-from . import llm
+from . import config, llm
+from .llm import ProviderOverride
 from .pipeline import IngestError, NoProviderError, ingest
 from .store import Claim, Store
 
@@ -36,10 +38,28 @@ def stats() -> dict:
 
 
 @app.post("/api/documents")
-async def upload(file: UploadFile = File(...)) -> dict:
+async def upload(
+    file: UploadFile = File(...),
+    provider: str | None = Form(None),
+    api_key: str | None = Form(None),
+) -> dict:
+    override = None
+    if provider or api_key:
+        if not provider or not api_key:
+            raise HTTPException(400, "Give both a provider and a key, or neither.")
+        if provider not in config.PROVIDERS:
+            raise HTTPException(400, f"Unknown provider {provider!r}.")
+        override = ProviderOverride(provider, api_key)
+
     data = await file.read()
     try:
-        result = ingest(data, file.filename or "document.pdf", require_provider=True)
+        # ingest() makes synchronous, sometimes slow LLM calls. Run as a plain
+        # async route, it would block the event loop for that whole time — freezing
+        # every other visitor's request, health check included, until it finished.
+        result = await run_in_threadpool(
+            ingest, data, file.filename or "document.pdf",
+            require_provider=True, provider_override=override,
+        )
     except IngestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except NoProviderError as exc:

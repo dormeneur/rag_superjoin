@@ -14,7 +14,7 @@ from datetime import date
 
 from rapidfuzz import fuzz, process
 
-from .llm import complete_json
+from .llm import ProviderOverride, complete_json
 from .normalize import (
     normalize_entity,
     normalize_metric,
@@ -91,12 +91,18 @@ written. Use null when the pages do not say. Reply with the object and nothing e
 """
 
 
-def document_metadata(pages: list[Page]) -> dict:
+def document_metadata(
+    pages: list[Page], *, provider_override: ProviderOverride | None = None
+) -> dict:
     """Publication date matters: it is what lets a later document supersede an
     earlier one instead of contradicting it."""
     opening = "\n\n".join(page.text for page in pages[:3])[:6000]
     try:
-        data = complete_json(METADATA_SYSTEM, opening, max_tokens=300)
+        # 600, not 300: a reasoning-capable model spends part of the budget thinking
+        # before it writes the answer, and 300 was cutting that answer off.
+        data = complete_json(
+            METADATA_SYSTEM, opening, max_tokens=600, provider_override=provider_override
+        )
     except Exception:
         return {}
     if not isinstance(data, dict):
@@ -116,11 +122,15 @@ def claims_from_page(
     doc_date: date | None,
     vocabulary: dict[str, list[str]],
     subject: str = "",
+    provider_override: ProviderOverride | None = None,
 ) -> list[Claim]:
     """Extract and ground the claims on one page. Raises when the model is
     unreachable or unreadable, so the caller can lose one page rather than the
     whole document."""
-    reply = complete_json(SYSTEM, _prompt(page, vocabulary, subject), max_tokens=8192)
+    reply = complete_json(
+        SYSTEM, _prompt(page, vocabulary, subject), max_tokens=8192,
+        provider_override=provider_override,
+    )
     if not isinstance(reply, list):
         return []
 

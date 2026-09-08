@@ -173,7 +173,10 @@ class Store:
         self.path = Path(path) if path else config.db_path()
         if self.path.parent != Path(""):
             self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(self.path, check_same_thread=False)
+        # The upload route now runs off the event loop in a thread pool, so two
+        # uploads can genuinely write at once. SQLite serializes writers itself;
+        # this just makes the second one wait rather than raise "database is locked".
+        self.connection = sqlite3.connect(self.path, check_same_thread=False, timeout=30.0)
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.executescript(SCHEMA)

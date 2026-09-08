@@ -34,9 +34,9 @@ def client():
     return TestClient(app)
 
 
-def upload(client, data: bytes, name: str = "doc.pdf"):
+def upload(client, data: bytes, name: str = "doc.pdf", **form):
     return client.post(
-        "/api/documents", files={"file": (name, data, "application/pdf")}
+        "/api/documents", files={"file": (name, data, "application/pdf")}, data=form
     )
 
 
@@ -227,7 +227,62 @@ def test_upload_is_refused_clearly_when_no_provider_is_configured(client, monkey
     assert "provider" in response.json()["detail"].lower()
 
 
+def test_a_bring_your_own_key_bypasses_the_no_provider_refusal(client, monkeypatch, pdf_bytes):
+    """The server has no key of its own, but a caller who brings one should not be
+    turned away by the same guard that protects a keyless deployment."""
+    monkeypatch.setenv("LLM_PROVIDER_ORDER", "")
+
+    from factlayer import llm
+
+    def fake_call(name, system, user, max_tokens, *, api_key=None):
+        assert name == "groq"
+        assert api_key == "user-supplied-key"
+        return "[]"
+
+    monkeypatch.setattr(llm, "_call", fake_call)
+
+    response = upload(client, pdf_bytes([PAGE]), provider="groq", api_key="user-supplied-key")
+    assert response.status_code == 200
+    assert response.json()["status"] in ("complete", "partial")
+
+
+def test_giving_only_a_provider_or_only_a_key_is_rejected(client, pdf_bytes):
+    assert upload(client, pdf_bytes([PAGE]), provider="groq").status_code == 400
+    assert upload(client, pdf_bytes([PAGE]), api_key="some-key").status_code == 400
+
+
+def test_an_unrecognised_byok_provider_is_rejected(client, pdf_bytes):
+    response = upload(client, pdf_bytes([PAGE]), provider="not-a-real-provider", api_key="x")
+    assert response.status_code == 400
+
+
+def test_the_internal_fake_provider_cannot_be_selected_over_the_api(client, pdf_bytes):
+    """The scripted test provider is an implementation detail, not something a
+    real caller should ever be able to ask for."""
+    response = upload(client, pdf_bytes([PAGE]), provider="fake", api_key="x")
+    assert response.status_code == 400
+
+
 def test_health_reports_whether_uploads_are_possible(client):
     body = client.get("/health").json()
     assert "providers_ready" in body
     assert "uploads_enabled" in body
+
+
+def test_upload_runs_off_the_event_loop(monkeypatch):
+    """ingest() makes real, sometimes slow LLM calls. TestClient does not share one
+    persistent event loop across threads the way a live server does, so this can
+    only be checked by inspecting the route itself: it must hand the blocking call
+    to a thread pool rather than await it directly, or a single slow upload freezes
+    every other visitor's request — a health check included — for as long as it
+    takes. Verified against an actual running server during development; this
+    guards the specific line so the fix cannot silently regress."""
+    import inspect
+
+    from factlayer.api import upload
+
+    source = inspect.getsource(upload)
+    assert "run_in_threadpool" in source, (
+        "upload() calls ingest() directly again — that blocks the whole server "
+        "for every visitor while one upload's LLM calls are in flight."
+    )

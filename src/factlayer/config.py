@@ -30,8 +30,11 @@ PROVIDERS: dict[str, Provider] = {
     for p in [
         Provider("groq", "https://api.groq.com/openai/v1",
                  "GROQ_API_KEY", "GROQ_MODEL", "llama-3.3-70b-versatile"),
+        # A pinned version (previously gemini-2.0-flash) gets retired outright, not
+        # deprecated gracefully — Google's own model list stops listing it and every
+        # call 404s. "-latest" tracks whatever Google currently recommends instead.
         Provider("gemini", "https://generativelanguage.googleapis.com/v1beta/openai/",
-                 "GEMINI_API_KEY", "GEMINI_MODEL", "gemini-2.0-flash"),
+                 "GEMINI_API_KEY", "GEMINI_MODEL", "gemini-flash-latest"),
         Provider("openrouter", "https://openrouter.ai/api/v1",
                  "OPENROUTER_API_KEY", "OPENROUTER_MODEL",
                  "meta-llama/llama-3.3-70b-instruct:free"),
