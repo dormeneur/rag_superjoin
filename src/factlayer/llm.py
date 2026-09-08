@@ -89,6 +89,21 @@ def limiter_for(provider: str) -> RateLimiter:
         return limiter
 
 
+def models_by_availability(provider: str) -> list[str]:
+    """The provider's models, least busy first.
+
+    Quotas are per model, so a second model is a second allowance — but only if the
+    client goes there while the first is full instead of waiting its turn. Ties keep
+    the configured order, so the preferred model still wins when nothing is busy.
+    """
+    models = config.models_for(provider)
+    return sorted(
+        models,
+        key=lambda model: (limiter_for(f"{provider}:{model}").delay_for_next(),
+                           models.index(model)),
+    )
+
+
 def complete_json(system: str, user: str, *, max_tokens: int = 4096) -> Any:
     """Ask the first provider that will answer, and parse its reply as JSON."""
     order = config.provider_order()
@@ -131,6 +146,23 @@ _PERMANENT = ("401", "403", "404", "400", "invalid api key", "permission denied"
               "not found", "unsupported")
 
 
+_RETRY_HINT = re.compile(r"retry\s+in\s+([\d.]+)\s*s|retryDelay['\"]?\s*:\s*['\"]?([\d.]+)s", re.I)
+MAX_RETRY_WAIT = 120.0
+
+
+def retry_after(exc: Exception) -> float | None:
+    """How long the provider itself asked us to wait, if it said.
+
+    A per-minute quota wants roughly a minute; guessing two seconds spends another
+    request to be refused again. Capped so one unlucky answer cannot stall a run.
+    """
+    match = _RETRY_HINT.search(str(exc))
+    if not match:
+        return None
+    seconds = float(match.group(1) or match.group(2))
+    return min(seconds, MAX_RETRY_WAIT)
+
+
 def is_transient(exc: Exception) -> bool:
     """Whether the same request is worth sending again in a moment."""
     message = str(exc).lower()
@@ -156,29 +188,34 @@ def _call(name: str, system: str, user: str, max_tokens: int) -> str:
     from openai import OpenAI  # imported lazily so tests never need the network stack
 
     client = OpenAI(api_key=api_key, base_url=provider.base_url, timeout=90.0)
-    model = os.getenv(provider.model_env) or provider.default_model
-
-    limiter = limiter_for(name)
     attempts = config.provider_attempts()
-    for attempt in range(attempts):
-        limiter.acquire()
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                temperature=0,
-                max_tokens=max_tokens,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-            )
-            return response.choices[0].message.content or ""
-        except Exception as exc:
-            if attempt + 1 < attempts and is_transient(exc):
-                time.sleep(2 * 2**attempt)  # 2s, 4s, 8s
-                continue
-            raise LLMUnavailable(str(exc)[:200]) from exc
-    raise LLMUnavailable(f"{name} did not answer")
+    problems: list[str] = []
+
+    # Quotas are per model, so each model listed for this key is its own allowance.
+    for model in models_by_availability(name):
+        limiter = limiter_for(f"{name}:{model}")
+        for attempt in range(attempts):
+            limiter.acquire()
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    temperature=0,
+                    max_tokens=max_tokens,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                )
+                return response.choices[0].message.content or ""
+            except Exception as exc:
+                if attempt + 1 < attempts and is_transient(exc):
+                    # The provider usually says how long it wants; believe it.
+                    time.sleep(retry_after(exc) or 2 * 2**attempt)
+                    continue
+                problems.append(f"{model}: {str(exc)[:120]}")
+                break
+
+    raise LLMUnavailable("; ".join(problems) or f"{name} did not answer")
 
 
 def _fake(user: str) -> str:

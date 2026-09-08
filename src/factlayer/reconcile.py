@@ -85,14 +85,21 @@ def _compare_measurements(a, b, diff, tolerance, percent_tolerance) -> Verdict:
     diff["period"] = period
     if period["relation"] == "disjoint":
         return Verdict(UNRELATED, "PERIOD_DISJOINT", diff)
-    if period["relation"] != "same":
+    if period["relation"] in {"a_contains_b", "b_contains_a", "overlapping"}:
         # One period sits inside the other, so the numbers are measuring different
         # spans of time and are expected to differ.
         return Verdict(RECONCILABLE, "PERIOD_MISMATCH", diff)
 
+    # Agreement is checked before the period is used to withhold judgement: two
+    # figures that match are corroboration whether or not they are dated.
     diff["value"] = _compare_values(a, b, tolerance, percent_tolerance)
     if diff["value"]["agrees"]:
         return Verdict(CORROBORATES, "VALUE_AGREEMENT", diff)
+
+    if period["relation"] == "undeclared":
+        # A running total states no period; an individual transaction states a date.
+        # Comparing them as though they covered the same span invents a conflict.
+        return Verdict(RECONCILABLE, "PERIOD_UNDECLARED", diff)
 
     scope = _compare_scopes(a, b)
     diff["scope"] = scope
@@ -131,9 +138,9 @@ def _compare_values(a, b, tolerance, percent_tolerance) -> dict[str, Any]:
 def _compare_periods(a, b) -> dict[str, Any]:
     result = {"a": a.period_label, "b": b.period_label}
     if a.period_start is None or b.period_start is None:
-        result["relation"] = "same" if a.period_label == b.period_label else "unknown"
-        if result["relation"] == "unknown":
-            result["relation"] = "same"  # nothing to distinguish them by
+        # At least one side never said what span it covers, so there is no basis for
+        # claiming they cover the same one.
+        result["relation"] = "undeclared"
         return result
 
     if (a.period_start, a.period_end) == (b.period_start, b.period_end):
@@ -239,6 +246,13 @@ def describe(a: Claim, b: Claim, verdict: Verdict) -> str:
         )
         return (f"The documents qualify this differently ({pairs}), so {left} and {right} "
                 f"are measuring different things rather than disagreeing.")
+    if reason == "PERIOD_UNDECLARED":
+        stated = a.period_label or b.period_label
+        return (f"{left} and {right} are both reported for {subject}, but "
+                + (f"only one of them states a period ({stated}). "
+                   if stated else "neither states a period. ")
+                + "Without a shared period there is no basis for calling this a "
+                  "disagreement.")
     if reason == "SCOPE_UNDECLARED":
         stated = {**verdict.dimension_diff["scope"]["only_a"],
                   **verdict.dimension_diff["scope"]["only_b"]}

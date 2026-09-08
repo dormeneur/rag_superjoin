@@ -50,6 +50,18 @@ def provider_order() -> list[str]:
     return [name.strip() for name in raw.split(",") if name.strip()]
 
 
+def models_for(provider: str) -> list[str]:
+    """Models to try on one provider, in order.
+
+    Free quotas are counted per model, so naming a second model on the same key
+    both doubles the allowance and gives somewhere to go when the first is busy.
+    """
+    entry = PROVIDERS[provider]
+    raw = os.getenv(entry.model_env) or ""
+    models = [name.strip() for name in raw.split(",") if name.strip()]
+    return models or [entry.default_model]
+
+
 def db_path() -> Path:
     return Path(os.getenv("FACTLAYER_DB", "factlayer.db"))
 

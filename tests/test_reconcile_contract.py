@@ -351,3 +351,42 @@ def test_an_undeclared_qualifier_does_not_excuse_conflicting_attributes():
     b = attribute(doc_id="d", doc_date=date(2024, 6, 30), value_text="Auditor", scope={})
     assert verdict_of(a, b) == "RECONCILABLE"
     assert reason_of(a, b) == "SCOPE_UNDECLARED"
+
+
+# ------------------------------------------ an unknown period is not a shared one
+
+def test_a_period_on_only_one_side_is_not_a_contradiction():
+    """Found on real output: a shareholder's total holding, which states no period,
+    was being compared against individual dated purchases and called a contradiction.
+    Not knowing the period is not the same as sharing one."""
+    a = make_claim(value_num=141455770.0, unit=None,
+                   period_start=None, period_end=None, period_label=None)
+    b = make_claim(value_num=16486200.0, unit=None,
+                   period_start=date(2022, 1, 13), period_end=date(2022, 1, 13),
+                   period_label="2022-01-13")
+    assert verdict_of(a, b) == "RECONCILABLE"
+    assert reason_of(a, b) == "PERIOD_UNDECLARED"
+
+
+def test_neither_side_stating_a_period_is_not_a_contradiction():
+    a = make_claim(value_num=100.0, unit=None, period_start=None, period_end=None,
+                   period_label=None)
+    b = make_claim(value_num=250.0, unit=None, period_start=None, period_end=None,
+                   period_label=None)
+    assert verdict_of(a, b) == "RECONCILABLE"
+    assert reason_of(a, b) == "PERIOD_UNDECLARED"
+
+
+def test_undated_facts_that_agree_still_corroborate():
+    """Agreement is strong evidence on its own, so it must be checked before the
+    period is used as a reason to withhold judgement."""
+    a = make_claim(value_num=8.142e10, period_start=None, period_end=None, period_label=None)
+    b = make_claim(value_num=8.142e10, period_start=None, period_end=None, period_label=None)
+    assert verdict_of(a, b) == "CORROBORATES"
+
+
+def test_a_stated_shared_period_still_allows_a_contradiction():
+    """The fix must not make contradictions impossible to find."""
+    a = make_claim(value_num=8.142e10)
+    b = make_claim(value_num=7.900e10)
+    assert verdict_of(a, b) == "CONTRADICTS"

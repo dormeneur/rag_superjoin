@@ -108,3 +108,70 @@ def test_busy_and_flaky_providers_are_retried(message):
 def test_configuration_errors_are_not_retried(message):
     """Retrying a bad key just wastes the wait and hides the real problem."""
     assert not is_transient(Exception(message))
+
+
+# ------------------------------------- the provider knows better than the client
+
+from factlayer.llm import retry_after
+
+
+def test_a_stated_retry_delay_is_used():
+    """Gemini answers a 429 with exactly how long to wait. Guessing 2s when it said
+    52s just burns another request and another refusal."""
+    message = ("Error code: 429 - Quota exceeded ... Please retry in 52.424603739s. "
+               "'retryDelay': '52s'")
+    assert retry_after(Exception(message)) == pytest.approx(52.4246, rel=1e-4)
+
+
+def test_a_retry_delay_field_is_used_when_there_is_no_prose():
+    assert retry_after(Exception("{'retryDelay': '7s'}")) == pytest.approx(7.0)
+
+
+def test_no_stated_delay_returns_nothing():
+    assert retry_after(Exception("Error code: 503 - high demand")) is None
+
+
+def test_an_absurd_delay_is_capped():
+    """A provider asking for an hour must not stall the whole run."""
+    assert retry_after(Exception("Please retry in 3600s.")) == 120.0
+
+
+# -------------------------------------------------- more than one model per key
+
+from factlayer import config
+
+
+def test_a_provider_can_be_given_several_models(monkeypatch):
+    """Free quotas are per model, so a second model on the same key is a second
+    allowance and a fallback when the first is busy."""
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-flash-lite-latest, gemini-3.8-flash")
+    assert config.models_for("gemini") == ["gemini-flash-lite-latest", "gemini-3.8-flash"]
+
+
+def test_a_provider_falls_back_to_its_default_model(monkeypatch):
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    assert config.models_for("gemini") == [config.PROVIDERS["gemini"].default_model]
+
+
+def test_the_least_busy_model_is_tried_first(monkeypatch):
+    """Two models on one key are two quotas, but only if the client moves to the
+    second when the first is full. Trying them in a fixed order means the client
+    sits waiting on model one while model two is idle."""
+    from factlayer.llm import limiter_for, models_by_availability
+
+    monkeypatch.setenv("GEMINI_MODEL", "busy-model, idle-model")
+    monkeypatch.setenv("FACTLAYER_RPM", "2")
+
+    busy = limiter_for("gemini:busy-model")
+    for _ in range(2):
+        busy.record()
+
+    assert models_by_availability("gemini")[0] == "idle-model"
+
+
+def test_model_order_is_kept_when_neither_is_busy(monkeypatch):
+    from factlayer.llm import models_by_availability
+
+    monkeypatch.setenv("GEMINI_MODEL", "first-model, second-model")
+    monkeypatch.setenv("FACTLAYER_RPM", "50")
+    assert models_by_availability("gemini") == ["first-model", "second-model"]
