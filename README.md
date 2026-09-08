@@ -10,7 +10,7 @@ Those verdicts come from rules, not from a language model, so they are reproduci
 
 ## Live Demo
 
-**<!-- LIVE_URL -->** — opens with six documents already processed. The four cases the
+**<https://fact-knowledge-layer-mei7.onrender.com>** — opens with six documents already processed. The four cases the
 assignment asks for are on the front page, each with its source quotes and page
 numbers. Nothing to install, nothing to configure, no key to enter.
 

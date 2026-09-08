@@ -23,11 +23,12 @@ be the point: the assignment says the system "should not rely on ... document-sp
 rules," and using something it has never indexed is how you show that's true rather
 than claim it.
 
-**3. Open the live URL** and confirm the front page shows **6 PDF Documents** and
-roughly **4,281 facts** before you start. If it shows different numbers or a different
-design entirely, you are not looking at your own deployment — Render subdomains are
-shared globally and the name in `render.yaml` is not unique. Check your Render
-dashboard for the URL it actually assigned you before recording anything.
+**3. Open <https://fact-knowledge-layer-mei7.onrender.com>** — that is the confirmed
+deployment, showing 6 documents / 4,281 facts / 11,514 relationships / 743 quarantined
+on the paper-coloured design. (Render gave it that suffixed name because
+`fact-knowledge-layer` — the assignment's own title — was already taken by an
+unrelated deployment. If the site ever needs redeploying and the URL changes again,
+re-check it against these numbers before recording.)
 
 ## Shot list (target 2:30, hard limit 3:00)
 
