@@ -81,8 +81,8 @@ takes about thirty seconds, then run this command again:
   2. Choose "Manual setup" (not the AI agent option)
   3. Space name:   $space
      Licence:      mit
-     Select the SDK: Docker  ->  Blank
-     Hardware:     CPU basic (free)
+     Select the SDK: Gradio  ->  Blank   (Docker Spaces are a paid feature)
+     Hardware:     the free tier offered
      Visibility:   Public
   4. Click "Create Space", then re-run:
 

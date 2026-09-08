@@ -3,8 +3,8 @@ title: Fact Knowledge Layer
 emoji: 📄
 colorFrom: gray
 colorTo: green
-sdk: docker
-app_port: 7860
+sdk: gradio
+app_file: app.py
 pinned: false
 license: mit
 short_description: Extracts facts from PDFs and reconciles them across documents

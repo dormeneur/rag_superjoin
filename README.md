@@ -84,10 +84,13 @@ gzip -9 -c factlayer.db > deploy/factlayer.db.gz
 Or run the **Deploy to Hugging Face Space** workflow from the Actions tab, having added
 `HF_TOKEN` as a repository secret — no local clone needed.
 
-It runs anywhere that takes a Dockerfile. Hugging Face Spaces is the default because it
-is free, needs no card, and keeps a permanent URL. Browsing the corpus needs no
-credentials; to enable uploads on the deployment, add `GEMINI_API_KEY` under the Space's
-*Variables and secrets*.
+The Space uses the **Gradio SDK**, because Docker Spaces are a paid feature and Gradio
+Spaces are not. `app.py` unpacks the corpus and serves the same FastAPI application the
+Dockerfile does; Gradio is mounted at `/gradio` only to satisfy the SDK. The Dockerfile
+still works anywhere that takes one.
+
+Browsing the corpus needs no credentials. To enable uploads on the deployment, add
+`GEMINI_API_KEY` under the Space's *Variables and secrets*.
 
 ### API
 
