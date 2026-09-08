@@ -79,6 +79,24 @@ esac
 
 cd "$staging"
 git init -q
+
+# The Hub rejects any binary file that is not in LFS, whatever its size, so the
+# corpus has to be tracked before it is added.
+if ! git lfs version >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+git-lfs is not installed, and the Hub will not accept the corpus without it.
+
+  Windows   it ships with Git for Windows; run:  git lfs install
+  macOS     brew install git-lfs && git lfs install
+  Debian    sudo apt install git-lfs && git lfs install
+
+Then run this command again.
+EOF
+  exit 1
+fi
+git lfs install --local >/dev/null
+git lfs track "deploy/*.gz" >/dev/null
+git add .gitattributes
 git add -A
 git -c user.email=deploy@localhost -c user.name=deploy commit -qm "Deploy fact knowledge layer"
 

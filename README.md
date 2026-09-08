@@ -80,6 +80,10 @@ python -m factlayer ingest data/*/*.pdf
 gzip -9 -c factlayer.db > deploy/factlayer.db.gz
 ```
 
+The corpus is a binary file, and the Hub rejects binaries outside Git LFS whatever
+their size, so the script tracks it in LFS before pushing. Git for Windows ships with
+git-lfs; elsewhere install it once.
+
 Or run the **Deploy to Hugging Face Space** workflow from the Actions tab, having added
 `HF_TOKEN` as a repository secret — no local clone needed.
 
