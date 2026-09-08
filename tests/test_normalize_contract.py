@@ -157,3 +157,27 @@ def test_a_label_the_document_actually_wrote_is_left_alone(raw):
     """Anything with a space is already how the page words it, and must not be
     reformatted."""
     assert readable(raw) == raw
+
+
+from factlayer.normalize import readable_name
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("sahil_barua", "Sahil Barua"),
+        ("delhivery_limited", "Delhivery Limited"),
+        ("reserve_bank_of_india", "Reserve Bank of India"),
+        ("india", "India"),
+        ("svf_doorbell", "SVF Doorbell"),
+    ],
+)
+def test_an_entity_key_is_presented_as_a_name(raw, expected):
+    """Entities are people, companies and places. Sentence case turns 'Sahil Barua'
+    into 'Sahil barua', which reads as a typo rather than a name."""
+    assert readable_name(raw) == expected
+
+
+@pytest.mark.parametrize("raw", ["Delhivery Limited", "Reserve Bank of India", "IMF", ""])
+def test_a_name_the_document_wrote_is_left_alone(raw):
+    assert readable_name(raw) == raw

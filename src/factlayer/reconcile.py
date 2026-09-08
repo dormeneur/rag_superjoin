@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import config
-from .normalize import is_currency, normalize_value_text, readable
+from .normalize import is_currency, normalize_value_text, readable, readable_name
 from .store import Claim
 
 CORROBORATES = "CORROBORATES"
@@ -224,7 +224,7 @@ def describe(a: Claim, b: Claim, verdict: Verdict) -> str:
     Always available, even with every provider rate-limited, so a relation is never
     shown without a reason. A model may rewrite this later; it may not change it.
     """
-    subject = f"{readable(a.entity)} · {readable(a.metric)}"
+    subject = f"{readable_name(a.entity)} · {readable(a.metric)}"
     left, right = _render(a), _render(b)
     reason = verdict.reason_code
 
@@ -268,22 +268,22 @@ def describe(a: Claim, b: Claim, verdict: Verdict) -> str:
         return (f"One of these figures has no stated unit ({left} versus {right}), so they "
                 f"cannot safely be compared.")
     if reason == "ATTRIBUTE_AGREEMENT":
-        return (f"Both documents state {readable(a.entity)}'s "
+        return (f"Both documents state {readable_name(a.entity)}'s "
                 f"{readable(a.metric).lower()} as {a.value_text}.")
     if reason == "TEMPORAL_SUCCESSION":
-        return (f"{readable(a.entity)}'s {readable(a.metric).lower()} is stated as "
+        return (f"{readable_name(a.entity)}'s {readable(a.metric).lower()} is stated as "
                 f"'{a.value_text}' for {a.period_label} and '{b.value_text}' for "
                 f"{b.period_label}. The value changed over time.")
     if reason == "TEMPORAL_SUCCESSION_INFERRED":
         older, newer = (a, b) if (a.doc_date and b.doc_date and a.doc_date < b.doc_date) else (b, a)
-        return (f"{readable(a.entity)}'s {readable(a.metric).lower()} is "
+        return (f"{readable_name(a.entity)}'s {readable(a.metric).lower()} is "
                 f"'{older.value_text}' in the older document "
                 f"({older.doc_date}) and '{newer.value_text}' in the newer one "
                 f"({newer.doc_date}). Read as a change over time rather than a "
                 f"disagreement — neither document states validity dates, so this is "
                 f"inferred from publication dates.")
     if reason == "ATTRIBUTE_VALUE_CONFLICT":
-        return (f"{readable(a.entity)}'s {readable(a.metric).lower()} is given as "
+        return (f"{readable_name(a.entity)}'s {readable(a.metric).lower()} is given as "
                 f"'{a.value_text}' and '{b.value_text}' for the same time, and both "
                 f"cannot hold.")
     return f"{subject}: {reason.lower().replace('_', ' ')}."

@@ -273,6 +273,38 @@ def readable(label: str) -> str:
     return " ".join([first, *words[1:]])
 
 
+# Words that stay lower case inside a name unless they begin it.
+_MINOR_WORDS = {"of", "and", "the", "for", "in", "at", "to", "on", "de", "van"}
+
+# Keys that are an acronym plus a word, where title case would hide the acronym.
+_ACRONYMS = {"svf", "imf", "rbi", "hdfc", "icici", "sbi", "llp", "llc", "plc", "din", "usa", "uk", "us", "eu", "gdp", "cpi", "wpi"}
+
+
+def readable_name(name: str) -> str:
+    """Present an entity key as a name.
+
+    Entities are people, companies and places, so sentence case is wrong: it turns
+    "Sahil Barua" into "Sahil barua", which reads as a typo. Anything containing a
+    space is already how the document wrote it and is left alone.
+    """
+    if not name or " " in name:
+        return name
+    words = [word for word in name.split("_") if word]
+    if not words:
+        return name
+    out = []
+    for index, word in enumerate(words):
+        if word.isupper():
+            out.append(word)
+        elif word.lower() in _ACRONYMS:
+            out.append(word.upper())
+        elif index and word.lower() in _MINOR_WORDS:
+            out.append(word.lower())
+        else:
+            out.append(word.capitalize())
+    return " ".join(out)
+
+
 def normalize_value_text(value: str) -> str:
     """Loose comparison for written values, so 'Director & CEO' matches 'Director and
     CEO' without treating a genuinely different role as the same."""

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from . import config
-from .normalize import readable
+from .normalize import readable, readable_name
 from .pdf import Page
 
 SCHEMA = """
@@ -145,7 +145,7 @@ class Claim:
             "doc_id": self.doc_id,
             "kind": self.kind,
             "entity": self.entity,
-            "entity_label": readable(self.entity),
+            "entity_label": readable_name(self.entity),
             "entity_canonical": self.entity_canonical,
             "metric": self.metric,
             "metric_label": readable(self.metric),
