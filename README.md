@@ -8,6 +8,19 @@ until the system has tried to explain it and failed.** Period, unit, currency an
 each get a chance to account for the gap before anything is called a contradiction.
 Those verdicts come from rules, not from a language model, so they are reproducible.
 
+## Live Demo
+
+**<!-- LIVE_URL -->** — opens with six documents already processed. The four cases the
+assignment asks for are on the front page, each with its source quotes and page
+numbers. Nothing to install, nothing to configure, no key to enter.
+
+Those four are chosen by rule at query time rather than picked by hand, so they
+re-derive themselves against whatever documents are loaded — including any you upload.
+
+Browsing needs no credentials. Uploading a PDF needs a model key, which is attached to
+the deployment as a secret rather than committed; without one the upload endpoint says
+so plainly instead of accepting a file and storing nothing from it.
+
 ## Setup and Run Instructions
 
 ```bash
@@ -43,6 +56,22 @@ Tests need no key at all — a scripted provider stands in for the model:
 ```bash
 pytest
 ```
+
+### Deploying it
+
+The whole thing is one container: API, interface, and a knowledge layer already built
+from the starter documents, so a deployment opens with something to look at rather than
+an empty database.
+
+```bash
+python -m factlayer ingest data/*/*.pdf          # build the corpus
+gzip -9 -c factlayer.db > deploy/factlayer.db.gz # 11 MB becomes 1.7 MB
+deploy/publish.sh <hf-username> <space-name>     # push to a Hugging Face Space
+```
+
+It runs anywhere that takes a Dockerfile. Hugging Face Spaces is the default because it
+is free, needs no card, and keeps a permanent URL. To enable uploads on the deployment,
+add `GEMINI_API_KEY` under the Space's *Variables and secrets*.
 
 ### API
 
