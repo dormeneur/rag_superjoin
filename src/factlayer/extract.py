@@ -50,6 +50,7 @@ attribute — something that is true of a subject at a time.
   scope             qualifiers, e.g. {"organisation": "Delhivery Limited"}
 
 Every fact also needs:
+  kind              "measurement" or "attribute"
   quote             ONE sentence or table row copied verbatim from the page that
                     states this fact. It must appear on the page character for
                     character. Never paraphrase, never join separated lines.
@@ -64,6 +65,9 @@ Rules
   the known list below whenever it means the same thing, even if this page words it
   differently. Only coin a new key when nothing in the list fits. Keys never contain
   a period, year or unit.
+
+- The page may name its subject only in a heading, a footer or a tagline. Prefer the
+  document's own name for the subject over a phrase used to describe it.
 
 Reply with a JSON array of objects and nothing else. An empty array is a valid answer.\
 """
@@ -104,7 +108,7 @@ def claims_from_page(
     """Extract and ground the claims on one page. Raises when the model is
     unreachable or unreadable, so the caller can lose one page rather than the
     whole document."""
-    reply = complete_json(SYSTEM, _prompt(page, vocabulary))
+    reply = complete_json(SYSTEM, _prompt(page, vocabulary), max_tokens=8192)
     if not isinstance(reply, list):
         return []
 
@@ -131,20 +135,24 @@ def _prompt(page: Page, vocabulary: dict[str, list[str]]) -> str:
 
 
 def _to_claim(item, page, doc_id, doc_date, vocabulary) -> Claim | None:
-    kind = str(item.get("kind") or "").strip().lower()
     entity = _clean(item.get("entity"))
     metric = _clean(item.get("metric"))
     quote = _clean(item.get("quote"))
-    if kind not in {"measurement", "attribute"} or not (entity and metric and quote):
+    if not (entity and metric and quote):
         return None  # not enough to be a claim at all, let alone a wrong one
 
     value_written = _clean(item.get("value")) or _clean(item.get("value_text"))
     if not value_written:
         return None
 
-    quantity = parse_quantity(value_written) if kind == "measurement" else None
-    if kind == "measurement" and quantity is None:
-        return None
+    # The shape follows the value, not the label. Models drop the label, and a
+    # "measurement" with no number in it ("credit rating: AAA") is an attribute.
+    quantity = parse_quantity(value_written)
+    kind = str(item.get("kind") or "").strip().lower()
+    if kind not in {"measurement", "attribute"} or (kind == "measurement" and not quantity):
+        kind = "measurement" if quantity else "attribute"
+    if kind == "attribute":
+        quantity = None
 
     period = parse_period(_clean(item.get("period")) or "")
     scope = item.get("scope") if isinstance(item.get("scope"), dict) else {}

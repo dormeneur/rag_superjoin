@@ -119,6 +119,26 @@ def available_providers() -> list[str]:
     return ready
 
 
+# A provider can say "not now" in several ways, and each one is worth waiting out.
+# Anything about the key, the model name or permissions is not: retrying that only
+# hides the real problem.
+_TRANSIENT = (
+    "429", "500", "502", "503", "504",
+    "rate", "quota", "overload", "unavailable", "timeout", "timed out",
+    "temporarily", "high demand", "connection reset", "connection error",
+)
+_PERMANENT = ("401", "403", "404", "400", "invalid api key", "permission denied",
+              "not found", "unsupported")
+
+
+def is_transient(exc: Exception) -> bool:
+    """Whether the same request is worth sending again in a moment."""
+    message = str(exc).lower()
+    if any(marker in message for marker in _PERMANENT):
+        return False
+    return any(marker in message for marker in _TRANSIENT)
+
+
 # ------------------------------------------------------------------- the callers
 
 
@@ -139,7 +159,8 @@ def _call(name: str, system: str, user: str, max_tokens: int) -> str:
     model = os.getenv(provider.model_env) or provider.default_model
 
     limiter = limiter_for(name)
-    for attempt in range(2):
+    attempts = config.provider_attempts()
+    for attempt in range(attempts):
         limiter.acquire()
         try:
             response = client.chat.completions.create(
@@ -153,9 +174,8 @@ def _call(name: str, system: str, user: str, max_tokens: int) -> str:
             )
             return response.choices[0].message.content or ""
         except Exception as exc:
-            transient = "429" in str(exc) or "rate" in str(exc).lower()
-            if transient and attempt == 0:
-                time.sleep(2)
+            if attempt + 1 < attempts and is_transient(exc):
+                time.sleep(2 * 2**attempt)  # 2s, 4s, 8s
                 continue
             raise LLMUnavailable(str(exc)[:200]) from exc
     raise LLMUnavailable(f"{name} did not answer")
@@ -183,8 +203,9 @@ _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.I)
 
 
 def _parse_json(text: str) -> Any:
-    """Models wrap JSON in prose and code fences. Take the fences off, and if that
-    is not enough, take the outermost array or object."""
+    """Models wrap JSON in prose and code fences, and run out of tokens mid-answer.
+    Take the fences off, then the outermost array or object, then — if it was cut
+    off — whatever complete objects it managed to finish."""
     candidate = _FENCE.sub("", (text or "").strip())
     try:
         return json.loads(candidate)
@@ -197,6 +218,57 @@ def _parse_json(text: str) -> Any:
             try:
                 return json.loads(candidate[start : end + 1])
             except json.JSONDecodeError:
-                continue
+                pass
+        # An unclosed array must be salvaged before falling back to pulling a single
+        # object out of it, or a truncated list collapses into its first entry.
+        if opener == "[" and _is_array(candidate):
+            if salvaged := _salvage_array(candidate):
+                return salvaged
+
+    if salvaged := _salvage_array(candidate):
+        return salvaged
 
     raise LLMOutputError(f"Could not read JSON from the reply: {candidate[:200]!r}")
+
+
+def _is_array(text: str) -> bool:
+    opener, brace = text.find("["), text.find("{")
+    return opener != -1 and (brace == -1 or opener < brace)
+
+
+def _salvage_array(text: str) -> list | None:
+    """Recover the complete objects from an array the model never closed.
+
+    A page of forty table rows that stopped at row thirty-nine still holds
+    thirty-nine facts, and grounding will check each of them anyway.
+    """
+    start = text.find("[")
+    if start == -1:
+        return None
+
+    objects, depth, obj_start, in_string, escaped = [], 0, None, False, False
+    for index in range(start + 1, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            if depth == 0:
+                obj_start = index
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0 and obj_start is not None:
+                try:
+                    objects.append(json.loads(text[obj_start : index + 1]))
+                except json.JSONDecodeError:
+                    pass
+                obj_start = None
+    return objects or None

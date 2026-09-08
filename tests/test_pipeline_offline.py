@@ -294,3 +294,77 @@ def test_pages_with_nothing_to_extract_are_not_retried_forever(fake_llm, pdf_byt
     fake_llm({"8,142 crore": revenue_claim()})
     result = ingest(pdf_bytes([REVENUE_PAGE, "Contents", "  "]), "a.pdf")
     assert result.status == "complete"
+
+
+# ---------------------------------------------------- tolerating model omissions
+
+def test_a_numeric_claim_without_an_explicit_kind_is_a_measurement(fake_llm, pdf_bytes):
+    """Models drop optional fields. Losing a well-grounded fact over a missing label
+    would be throwing away good evidence for a formatting slip."""
+    item = revenue_claim()[0]
+    del item["kind"]
+    fake_llm({"8,142 crore": [item]})
+
+    result = ingest(pdf_bytes([REVENUE_PAGE]), "doc.pdf")
+    assert result.claims_extracted == 1
+    assert Store().claims()[0].kind == "measurement"
+
+
+def test_a_textual_claim_without_an_explicit_kind_is_an_attribute(fake_llm, pdf_bytes):
+    page = "Sahil Barua is the Managing Director and Chief Executive Officer."
+    fake_llm({
+        "Sahil Barua": [{
+            "entity": "Sahil Barua",
+            "entity_canonical": "sahil_barua",
+            "metric": "role",
+            "metric_canonical": "role",
+            "value_text": "Managing Director and Chief Executive Officer",
+            "quote": page,
+            "confidence": 0.9,
+        }]
+    })
+    result = ingest(pdf_bytes([page]), "doc.pdf")
+    assert result.claims_extracted == 1
+    assert Store().claims()[0].kind == "attribute"
+
+
+def test_a_measurement_with_no_readable_number_becomes_an_attribute(fake_llm, pdf_bytes):
+    """'Credit rating: AAA' is a fact worth keeping, just not a numeric one."""
+    page = "The Company's long-term credit rating is AAA (Stable) as of March 31, 2024."
+    fake_llm({
+        "credit rating": [{
+            "kind": "measurement",
+            "entity": "Delhivery Limited",
+            "entity_canonical": "delhivery_limited",
+            "metric": "long-term credit rating",
+            "metric_canonical": "long_term_credit_rating",
+            "value": "AAA (Stable)",
+            "period": "as of March 31, 2024",
+            "quote": page,
+            "confidence": 0.9,
+        }]
+    })
+    result = ingest(pdf_bytes([page]), "doc.pdf")
+    assert result.claims_extracted == 1
+    claim = Store().claims()[0]
+    assert claim.kind == "attribute"
+    assert claim.value_text == "AAA (Stable)"
+
+
+def test_a_page_whose_only_fact_carries_no_digits_is_still_read(fake_llm, pdf_bytes):
+    """Skipping pages by looking for numbers loses semantic facts. The page filter
+    only skips pages with too little text to state anything."""
+    page = "The Company's long-term credit rating is AAA (Stable)."
+    fake_llm({
+        "credit rating": [{
+            "kind": "attribute",
+            "entity": "Delhivery Limited",
+            "entity_canonical": "delhivery_limited",
+            "metric": "long-term credit rating",
+            "metric_canonical": "long_term_credit_rating",
+            "value_text": "AAA (Stable)",
+            "quote": page,
+            "confidence": 0.9,
+        }]
+    })
+    assert ingest(pdf_bytes([page]), "doc.pdf").claims_extracted == 1

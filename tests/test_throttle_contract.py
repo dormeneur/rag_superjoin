@@ -70,3 +70,41 @@ def test_the_limiter_is_safe_to_share_between_threads(clock):
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(lambda _: limiter.record(), range(400)))
     assert limiter.used() == 400
+
+
+# --------------------------------------------------- what is worth retrying
+
+from factlayer.llm import is_transient
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Error code: 429 - rate limit exceeded",
+        "Error code: 503 - This model is currently experiencing high demand.",
+        "Error code: 500 - internal error",
+        "Error code: 502 - bad gateway",
+        "The model is overloaded. Please try again later.",
+        "status: UNAVAILABLE",
+        "Request timed out.",
+        "Connection reset by peer",
+    ],
+)
+def test_busy_and_flaky_providers_are_retried(message):
+    """A free tier says no in several different ways. Treating only 429 as transient
+    throws away a page for what was a two-second hiccup."""
+    assert is_transient(Exception(message))
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Error code: 401 - invalid api key",
+        "Error code: 400 - model not found",
+        "Error code: 404 - no such model",
+        "Error code: 403 - permission denied",
+    ],
+)
+def test_configuration_errors_are_not_retried(message):
+    """Retrying a bad key just wastes the wait and hides the real problem."""
+    assert not is_transient(Exception(message))

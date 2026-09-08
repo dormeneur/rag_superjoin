@@ -77,6 +77,12 @@ def requests_per_minute() -> int:
     return int(os.getenv("FACTLAYER_RPM", "25"))
 
 
+def provider_attempts() -> int:
+    """How many times to re-send a request a provider refused for a transient
+    reason before falling through to the next provider."""
+    return max(1, int(os.getenv("FACTLAYER_ATTEMPTS", "3")))
+
+
 def max_pages_per_document() -> int:
     """0 means no cap. Useful when a free tier is close to its daily limit."""
     return int(os.getenv("FACTLAYER_MAX_PAGES", "0"))
