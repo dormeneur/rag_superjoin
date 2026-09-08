@@ -1,0 +1,14 @@
+# One-click deploy: Render reads this file and builds the Dockerfile, so the only
+# thing to configure is which repository to point at.
+services:
+  - type: web
+    name: fact-knowledge-layer
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # Uploads land on the container's own disk, which is discarded when the free
+      # instance sleeps. The prepared corpus is rebuilt from the image every start.
+      - key: FACTLAYER_UPLOADS
+        value: /tmp/uploads

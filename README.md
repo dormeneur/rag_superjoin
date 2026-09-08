@@ -61,39 +61,39 @@ pytest
 
 The whole thing is one container: API, interface, and a knowledge layer already built
 from the starter documents, so a deployment opens with something to look at rather than
-an empty database.
+an empty database. The built corpus is committed at `deploy/factlayer.db.gz` (2.4 MB)
+and unpacked at image build time, so a deploy needs no API key and no rebuild.
 
-The built corpus is committed at `deploy/factlayer.db.gz` (2.4 MB), so publishing needs
-one command and no rebuild:
+**Render** reads `render.yaml` and builds the `Dockerfile`, so the only decision is
+which repository to point at:
+
+> New → Blueprint → pick this repository → Apply.
+
+The free instance is 512 MB; the server settles at about 77 MB serving this corpus. It
+sleeps after inactivity and takes roughly a minute to wake, which is the price of free.
+
+The container reads `PORT` from the environment and falls back to 7860, so the same
+image runs unchanged on anything that speaks Docker:
 
 ```bash
-HF_TOKEN=hf_xxx deploy/publish.sh          # creates the Space and pushes to it
+docker build -t factlayer . && docker run -p 8000:8000 -e PORT=8000 factlayer
 ```
 
-The username is read from the token. Creating a Space through the API needs the paid
-tier and answers 402 otherwise, so the script treats that as "it already exists" and
-pushes anyway; if the push then reports the repository is missing, it prints the half
-minute of clicking that fixes it. Rebuild the corpus first only if you want to:
+**Hugging Face Spaces** was the first target and `deploy/publish.sh` still works, but
+not on a free account: Docker Spaces are a paid feature, and a free account's Gradio
+Spaces are pinned to ZeroGPU hardware, whose runtime already holds the port the server
+needs. It needs a PRO subscription, so `app.py`, the publish script and the
+**Deploy to Hugging Face Space** action are kept for anyone who has one.
+
+Rebuild the corpus first only if you want to:
 
 ```bash
 python -m factlayer ingest data/*/*.pdf
 gzip -9 -c factlayer.db > deploy/factlayer.db.gz
 ```
 
-The corpus is a binary file, and the Hub rejects binaries outside Git LFS whatever
-their size, so the script tracks it in LFS before pushing. Git for Windows ships with
-git-lfs; elsewhere install it once.
-
-Or run the **Deploy to Hugging Face Space** workflow from the Actions tab, having added
-`HF_TOKEN` as a repository secret — no local clone needed.
-
-The Space uses the **Gradio SDK**, because Docker Spaces are a paid feature and Gradio
-Spaces are not. The SDK only decides which image is built and which file is run, so
-`app.py` is a plain FastAPI entry point: it unpacks the corpus and serves the same
-application the Dockerfile does. The Dockerfile still works anywhere that takes one.
-
-Browsing the corpus needs no credentials. To enable uploads on the deployment, add
-`GEMINI_API_KEY` under the Space's *Variables and secrets*.
+Browsing the corpus needs no credentials. To let a deployment accept new PDFs, set
+`GEMINI_API_KEY` (or any provider key from the table above) in its environment.
 
 ### API
 
