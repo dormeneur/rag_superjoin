@@ -7,7 +7,7 @@ sdk: gradio
 app_file: app.py
 pinned: false
 license: mit
-short_description: Extracts facts from PDFs and reconciles them across documents
+short_description: Grounded facts from PDFs, reconciled across documents
 ---
 
 # Fact Knowledge Layer

@@ -40,6 +40,10 @@ if [ ! -f "$root/deploy/factlayer.db.gz" ]; then
   exit 1
 fi
 
+# The Hub validates the Space header server side, so a bad one costs a full upload
+# of the corpus to discover. Check it here instead.
+python3 "$root/deploy/check_space_readme.py" "$root/deploy/README-space.md" || exit 1
+
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 
