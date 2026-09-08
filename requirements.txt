@@ -1,0 +1,3 @@
+# Hugging Face Spaces installs this. The package itself is installed from source
+# so src/factlayer travels with the Space.
+.
