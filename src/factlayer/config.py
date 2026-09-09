@@ -40,6 +40,14 @@ PROVIDERS: dict[str, Provider] = {
                  "meta-llama/llama-3.3-70b-instruct:free"),
         Provider("cerebras", "https://api.cerebras.ai/v1",
                  "CEREBRAS_API_KEY", "CEREBRAS_MODEL", "llama-3.3-70b"),
+        # Ollama (https://ollama.com) speaks the same OpenAI wire format on your own
+        # machine — no key, no network, no shared quota. It does not check the key
+        # at all, so OLLAMA_API_KEY only needs to be non-empty to satisfy the same
+        # check every other provider goes through; any placeholder value works.
+        # Only reachable when factlayer itself is also running on this machine —
+        # localhost on a deployment means the deployment's own container, not yours.
+        Provider("ollama", "http://localhost:11434/v1",
+                 "OLLAMA_API_KEY", "OLLAMA_MODEL", "llama3.1"),
     ]
 }
 

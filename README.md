@@ -44,6 +44,12 @@ rate-limited:
 | OpenRouter | <https://openrouter.ai/keys> (models ending `:free`) |
 | Cerebras | <https://cloud.cerebras.ai> |
 
+Or skip keys and the network entirely with **[Ollama](https://ollama.com)**
+running on the same machine — set `LLM_PROVIDER_ORDER=ollama` and
+`OLLAMA_MODEL` to whatever `ollama list` shows, in `.env`. No quota to share,
+nothing for a flaky connection to interrupt; the trade is your own hardware's
+speed instead of a hosted model's.
+
 Command line, for loading several PDFs at once:
 
 ```bash

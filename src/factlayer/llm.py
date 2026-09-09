@@ -211,7 +211,11 @@ def _call(name: str, system: str, user: str, max_tokens: int, *, api_key: str | 
 
     from openai import OpenAI  # imported lazily so tests never need the network stack
 
-    client = OpenAI(api_key=key, base_url=provider.base_url, timeout=90.0)
+    # 180s, not 90: CPU-only local inference (Ollama on a laptop with no GPU) can
+    # genuinely take longer for an 8192-token extraction call than any of the
+    # hosted providers ever do, and the extra headroom costs nothing when a call
+    # actually is fast.
+    client = OpenAI(api_key=key, base_url=provider.base_url, timeout=180.0)
     attempts = config.provider_attempts()
     problems: list[str] = []
 
