@@ -33,15 +33,17 @@ re-check it against these numbers before recording.)
 ## Shot list (target 2:30, hard limit 3:00)
 
 **0:00–0:15 — What it is**
-Front page. Read the one-liner under the masthead. Point at the ledger:
-6 documents, ~4,281 facts, ~11,514 relationships already computed.
+Front page, the "Try it" view. Read the one-liner. Point at the sidebar's running
+totals: 6 documents, ~4,281 facts, ~11,514 relationships already computed.
 
 **0:15–0:50 — A PDF being processed** *(the assignment requires this on screen)*
-Scroll to **"Upload your own PDF"**. Drop the new file. Narrate what's on screen while
-it reads: "Reading *filename*… Ns elapsed." When it finishes, the note line reports the
-page count, facts extracted, quarantined count, and new relationships — read that line
-aloud, then say: "it just became part of the same knowledge layer, compared against
-everything already there."
+Drop the new file onto the upload box. A progress bar appears and moves in real
+steps — "Read 3 of 9 pages…" and so on — because a long PDF is read a few pages at
+a time rather than in one long request. Narrate that while it runs. When it
+finishes, point at the stat row underneath (pages read, facts found, quarantined,
+new relationships) and the actual extracted facts shown right there with their
+quotes, then say: "it just became part of the same knowledge layer, compared
+against everything already there."
 
 **0:50–1:15 — Case 1, corroboration** *(Exhibits, card 1)*
 Two different documents state India's FX reserves for the same period — one as

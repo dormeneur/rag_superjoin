@@ -233,6 +233,22 @@
   .drop b { font-size: 15.5px; font-weight: 600; }
   .drop p { margin: 7px 0 0; font-size: 13px; color: var(--muted); }
 
+  .upload-progress { margin-top: 12px; }
+  .upload-progress-bar {
+    height: 6px; background: var(--sunk); border: 1px solid var(--rule); border-radius: 3px;
+    overflow: hidden;
+  }
+  .upload-progress-fill {
+    height: 100%; width: 3%; background: var(--accent);
+    transition: width .35s ease; will-change: width;
+  }
+  .upload-progress-fill.indeterminate { animation: creep 1.6s ease-in-out infinite alternate; }
+  @keyframes creep { from { width: 4%; } to { width: 22%; } }
+  @media (prefers-reduced-motion: reduce) { .upload-progress-fill.indeterminate { animation: none; width: 12%; } }
+  .upload-progress-label {
+    margin: 6px 0 0; font-size: 12px; color: var(--muted); text-align: center;
+  }
+
   .byok { margin-top: 12px; font-size: 12.5px; }
   .byok summary { color: var(--muted); }
   .byok-body {
@@ -340,6 +356,13 @@
         <div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload a PDF">
           <b>Drop a PDF here, or click to choose one</b>
           <p id="uploadNote">Text-based PDFs only — there is no OCR.</p>
+        </div>
+
+        <div class="upload-progress" id="uploadProgress" hidden aria-live="polite">
+          <div class="upload-progress-bar">
+            <div class="upload-progress-fill" id="uploadProgressFill"></div>
+          </div>
+          <p class="upload-progress-label" id="uploadProgressLabel"></p>
         </div>
 
         <details class="byok" id="byok">
@@ -725,36 +748,78 @@ drop.ondrop = (e) => {
   if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]);
 };
 
+function setProgress(read, total) {
+  const fill = $("uploadProgressFill");
+  const label = $("uploadProgressLabel");
+  if (total) {
+    fill.classList.remove("indeterminate");
+    fill.style.width = `${Math.min(100, Math.round((read / total) * 100))}%`;
+    label.textContent = read >= total
+      ? `Read all ${total} page${total === 1 ? "" : "s"}. Comparing against the layer…`
+      : `Read ${read} of ${total} page${total === 1 ? "" : "s"}…`;
+  } else {
+    fill.classList.add("indeterminate");
+    label.textContent = "Uploading and parsing the PDF…";
+  }
+}
+
 async function upload(file) {
   const note = $("uploadNote");
   $("playResult").hidden = true;
-  const started = Date.now();
-  const tick = setInterval(() => {
-    note.textContent = `Reading ${file.name}… ${Math.round((Date.now() - started) / 1000)}s elapsed.`;
-  }, 1000);
-  note.textContent = `Reading ${file.name}…`;
+  note.textContent = "";
+  $("uploadProgress").hidden = false;
+  setProgress(0, null);
+
+  // A long PDF is capped to a few pages per request server-side (long single
+  // requests are exactly what a proxy or a flaky mobile connection kills), so one
+  // drop here becomes several small requests, chained automatically, each moving
+  // the bar and each one safe to retry on its own if the connection drops.
+  const totals = { pages_read: 0, claims_extracted: 0, claims_quarantined: 0, relations_created: 0 };
+  let pageCount = null;
+  let final = null;
+
   try {
-    const body = new FormData();
-    body.append("file", file);
-    const byokKey = $("byokKey").value.trim();
-    if (byokKey) {
-      body.append("provider", $("byokProvider").value);
-      body.append("api_key", byokKey);
+    for (let round = 1; ; round++) {
+      const body = new FormData();
+      body.append("file", file);
+      const byokKey = $("byokKey").value.trim();
+      if (byokKey) {
+        body.append("provider", $("byokProvider").value);
+        body.append("api_key", byokKey);
+      }
+
+      const response = await fetch("/api/documents", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok) {
+        const progress = pageCount ? ` (${totals.pages_read} of ${pageCount} pages already read and saved)` : "";
+        note.innerHTML = `<span class="warn">${esc(result.detail || "Upload failed.")}${esc(progress)}` +
+          (pageCount ? " Drop the same file again to continue from here." : "") + `</span>`;
+        $("uploadProgress").hidden = true;
+        return;
+      }
+
+      pageCount = result.page_count;
+      totals.pages_read += result.pages_read;
+      totals.claims_extracted += result.claims_extracted;
+      totals.claims_quarantined += result.claims_quarantined;
+      totals.relations_created += result.relations_created;
+      final = result;
+      setProgress(totals.pages_read, pageCount);
+
+      if (result.status !== "partial") break;  // complete, or already fully in the layer
+      await new Promise((r) => setTimeout(r, 250));  // let the bar's step be visible
     }
-    const response = await fetch("/api/documents", { method: "POST", body });
-    const result = await response.json();
-    clearInterval(tick);
-    if (!response.ok) {
-      note.innerHTML = `<span class="warn">${esc(result.detail || "Upload failed.")}</span>`;
-      return;
-    }
+
+    $("uploadProgress").hidden = true;
     note.textContent = "Text-based PDFs only — there is no OCR.";
     offset = 0;
     ledger(); exhibits(); listing();
-    await renderPlayResult(file.name, result);
+    await renderPlayResult(file.name, { ...final, ...totals, page_count: pageCount });
   } catch (err) {
-    clearInterval(tick);
-    note.innerHTML = `<span class="warn">Upload failed: ${esc(err.message || err)}</span>`;
+    $("uploadProgress").hidden = true;
+    const progress = pageCount ? ` ${totals.pages_read} of ${pageCount} pages were already read and saved — ` +
+      "drop the same file again to continue from here." : "";
+    note.innerHTML = `<span class="warn">Upload failed: ${esc(err.message || err)}.${esc(progress)}</span>`;
   }
 }
 

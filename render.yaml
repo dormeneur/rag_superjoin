@@ -12,3 +12,9 @@ services:
       # instance sleeps. The prepared corpus is rebuilt from the image every start.
       - key: FACTLAYER_UPLOADS
         value: /tmp/uploads
+      # A single request reading every page of a long PDF can run for minutes —
+      # long enough for Render's proxy or a mobile connection to kill it outright.
+      # Capping pages per request keeps each one short; the web page chains
+      # requests automatically and shows real progress between them.
+      - key: FACTLAYER_MAX_PAGES
+        value: "3"
